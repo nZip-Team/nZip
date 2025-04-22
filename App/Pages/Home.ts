@@ -26,18 +26,15 @@ export default (args: { version: string }) => {
           new Element('a', { class: 'text', href: '/privacy', innerHTML: 'Privacy', style: { fontSize: '1rem' } })
        ])
       ]),
-      new Element('div', { style: { position: 'fixed', display: 'flex', fontSize: '1rem', bottom: '0.6rem', width: '100dvw' } }, [
-        new Element('div', { style: { display: 'flex', center: 'vertical', gap: '0.5rem', marginLeft: '1rem', marginRight: '1rem' } }, [
-          new Element('h1', { class: 'text', style: { fontSize: '1rem' }, innerHTML: 'Made by' }),
-          new Element('a', { class: 'text', href: 'https://github.com/noticebrick', target: '_blank', innerHTML: 'IceBrick', style: { fontSize: '1rem', fontWeight: 'bold' } }),
-          new Element('h1', { class: 'text', innerHTML: 'and', style: { fontSize: '1rem' } }),
-          new Element('a', { class: 'text', href: 'https://github.com/LmanTW', target: '_blank', innerHTML: 'LmanTW', style: { fontSize: '1rem', fontWeight: 'bold' } }),
-          new Element('h1', { class: 'text', innerHTML: 'with ❤️', style: { fontSize: '1rem' } })
+      new Element('div', { style: { position: 'fixed', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '1rem', bottom: '0.6rem', width: '100dvw - 2rem' } }, [
+        new Element('div', { style: { flex: '1', display: 'flex', flexShrink: '0', center: 'vertical', gap: '0.5rem' } }, [
+          new Element('h1', { class: 'text', style: { fontSize: '1rem', textWrap: 'nowrap' }, innerHTML: 'Made by' }),
+          new Element('a', { class: 'text', href: 'https://github.com/noticebrick', target: '_blank', innerHTML: 'IceBrick', style: { fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' } }),
+          new Element('h1', { class: 'text', innerHTML: 'and', style: { fontSize: '1rem', textWrap: 'nowrap' } }),
+          new Element('a', { class: 'text', href: 'https://github.com/LmanTW', target: '_blank', innerHTML: 'LmanTW', style: { fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' } }),
+          new Element('h1', { class: 'text', innerHTML: 'with ❤️', style: { fontSize: '1rem', textWrap: 'nowrap' } })
         ]),
-        new Element('div', { style: { flex: '1' } }),
-        new Element('h1', { class: 'text', style: { fontSize: '1rem', whiteSpace: 'nowrap', marginRight: '1rem' } }, [
-          new Element('a', { href: 'https://github.com/nZip-Team/nZip', target: '_blank', innerHTML: `nZip ${args.version}` })
-        ])
+        new Element('a', { href: 'https://github.com/nZip-Team/nZip', target: '_blank', innerHTML: `nZip ${args.version}`, style: { flexShrink: '0', fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' } })
       ]),
       new Element('script', { src: '/Scripts/Home.mjs' })
     ])
