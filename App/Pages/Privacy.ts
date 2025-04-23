@@ -19,11 +19,10 @@ export default () => {
         new Element('h1', { class: 'text', style: { fontSize: '1.25rem' }, innerHTML: '3. Purpose of Data Collection' }),
         new Element('p', { class: 'text', style: { fontSize: '1.25rem', marginBottom: '1rem' }, innerHTML: 'The data we collect is used solely for improving the service and ensuring its proper functionality.' }),
         new Element('h1', { class: 'text', style: { fontSize: '1.25rem' }, innerHTML: '4. Data Sharing' }),
-        new Element('p', { class: 'text', style: { fontSize: '1.25rem', marginBottom: '1rem' }, innerHTML: 'We do not share or sell any collected data to third parties.' })
+        new Element('p', { class: 'text', style: { fontSize: '1.25rem', marginBottom: '2rem' }, innerHTML: 'We do not share or sell any collected data to third parties.' })
       ]),
       new Element('div', { style: { backgroundColor: '$text_color', width: '90dvw', height: '0.075rem', opacity: '0.25' } }),
-
-      new Element('div', { style: { display: 'flex', flexDirection: 'column', center: 'vertical', width: '90dvw', marginTop: '1rem' } }, [
+      new Element('div', { style: { display: 'flex', flexDirection: 'column', center: 'vertical', width: '90dvw', marginTop: '2rem' } }, [
         new Element('p', { class: 'text', style: { fontSize: '1.25rem' }, innerHTML: 'By using nZip, you acknowledge that you have read and understood <a href="/terms">Terms of Service</a> and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.' }),
         new Element('p', { class: 'text', style: { fontSize: '1.25rem', marginTop: '1.25rem' }, innerHTML: 'If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.' })
       ]),
