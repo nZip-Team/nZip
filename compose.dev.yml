@@ -1,0 +1,18 @@
+# docker compose -f compose.dev.yml up
+
+services:
+  nzip-server:
+    container_name: nzip-server
+    image: nzip:dev
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - HOST=${HOST}
+      - PORT=${PORT}
+      - API_URL=${API_URL}
+      - IMAGE_URL=${IMAGE_URL}
+      - ANALYTICS=${ANALYTICS}
+      - NODE_ENV=${NODE_ENV}
+    network_mode: bridge
+    restart: unless-stopped

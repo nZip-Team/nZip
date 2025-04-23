@@ -10,7 +10,7 @@ export default () => {
     title: 'nZip | Privacy Policy',
     description: 'Privacy Policy of nZip',
     content: new Element('body', { style: { display: 'flex', flexDirection: 'column', center: 'horizontal vertical', backgroundColor: '$background_color', margin: '0', width: '100dvw', height: '100dvh' } }, [
-      new Element('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '90dvw' } }, [
+      new Element('div', { style: { display: 'flex', flexDirection: 'column', center: 'vertical', width: '90dvw' } }, [
         new Element('h1', { class: 'text', style: { fontSize: '2.75rem', marginBottom: '1rem' }, innerHTML: 'Privacy Policy' }),
         new Element('h1', { class: 'text', style: { fontSize: '1.25rem' }, innerHTML: '1. Data We Collect' }),
         new Element('p', { class: 'text', style: { fontSize: '1.25rem', marginBottom: '1rem' }, innerHTML: 'Geolocation information, Browser type and version, Referrer URL, Device information.' }),
@@ -23,7 +23,7 @@ export default () => {
       ]),
       new Element('div', { style: { backgroundColor: '$text_color', width: '90dvw', height: '0.075rem', opacity: '0.25' } }),
 
-      new Element('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '90dvw', marginTop: '1rem' } }, [
+      new Element('div', { style: { display: 'flex', flexDirection: 'column', center: 'vertical', width: '90dvw', marginTop: '1rem' } }, [
         new Element('p', { class: 'text', style: { fontSize: '1.25rem' }, innerHTML: 'By using nZip, you acknowledge that you have read and understood <a href="/terms">Terms of Service</a> and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.' }),
         new Element('p', { class: 'text', style: { fontSize: '1.25rem', marginTop: '1.25rem' }, innerHTML: 'If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.' })
       ]),

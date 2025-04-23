@@ -7,24 +7,24 @@
     "bundle": "bun -e \"import Bundle from './Server/Bundle'; await Bundle();\""
   },
   "dependencies": {
-    "bun": "^1.2.7",
-    "dotenv": "^16.4.7",
+    "bun": "^1.2.10",
+    "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "terser": "^5.39.0",
     "tsup": "^8.4.0",
-    "typescript": "^5.8.2",
+    "typescript": "^5.8.3",
     "ws": "^8.18.1",
     "yazl": "^3.3.1"
   },
   "devDependencies": {
     "@icebrick/file-downloader": "0.0.2",
-    "@icebrick/log": "^1.0.0",
+    "@icebrick/log": "^1.1.1",
     "@icebrick/nhget": "0.0.4",
-    "@lightbery/scope": "^1.0.1",
-    "@types/bun": "^1.2.8",
+    "@lightbery/scope": "1.0.1",
+    "@types/bun": "^1.2.10",
     "@types/express": "^4.17.21",
-    "@types/node": "^22.13.14",
-    "@types/ws": "^8.18.0",
+    "@types/node": "^22.14.1",
+    "@types/ws": "^8.18.1",
     "@types/yazl": "^2.4.6"
   }
 }
