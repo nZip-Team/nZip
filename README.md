@@ -53,16 +53,9 @@ Or use the following command to run the container in the background:
 docker compose up -d
 ```
 
-If you want to build the Docker image from scratch, edit the `compose.yml` file and change the `image` field to `build`:
-```yml
-services:
-  nzip-server:
-    image: nzip
-    build: .
-    (...)
-```
+If you want to run the development version in docker, use the following command instead:
 ```bash
-docker compose up --build
+docker compose -f compose.dev.yml up --build
 ```
 
 The nZip service should now be running on port 3000.
