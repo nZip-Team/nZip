@@ -12,7 +12,7 @@ nZip is a convenient tool for downloading doujinshi from nhentai.net as a zip ar
    
 2. **Direct ID Input**: Alternatively, you can enter the doujinshi ID directly on the nZip homepage to generate your zip archive.
 
-3. **Download the Archive**: Once you have entered the URL or ID, click the "Download" button to generate and download the zip archive.
+3. **Download the Archive**: Once you have entered the URL or ID, it will automatically fetch the images and download the archive.
 
 ## Running the Project
 
