@@ -20,7 +20,7 @@
     "@icebrick/file-downloader": "^1.0.0",
     "@icebrick/log": "^1.1.1",
     "@icebrick/nhget": "^1.0.1",
-    "@lightbery/scope": "^1.0.3",
+    "@lightbery/scope": "^1.0.4",
     "@types/bun": "^1.2.12",
     "@types/express": "^5.0.1",
     "@types/node": "^22.15.16",
