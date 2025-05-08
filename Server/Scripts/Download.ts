@@ -27,6 +27,20 @@ Scope.use({
 
 new Scope(document.body)
 
+type States = 'loading' | 'success'
+
+function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, state: States): void {
+  if (state === 'loading') {
+    Container.style.opacity = '1'
+    Status.style.animation = '1s flashing infinite'
+    Status.style.backgroundColor = 'var(--text_color)'
+  } else if (state === 'success') {
+    Container.style.opacity = '1'
+    Status.style.animation = ''
+    Status.style.backgroundColor = 'var(--text_color)'
+  }
+}
+
 const image_cover = document.getElementById('image-cover') as HTMLDivElement
 const step_connect_status = document.getElementById('step-connect-status') as HTMLDivElement
 const step_download_container = document.getElementById('step-download-container') as HTMLDivElement
@@ -67,9 +81,7 @@ socket.addEventListener('open', () => {
 
     if (buffer[0] === 0x00) {
       if (!step_download) {
-        step_download_container.style.opacity = '1'
-        step_download_status.style.animation = '1s flashing infinite'
-
+        statusAnimation(step_download_container, step_download_status, 'loading')
         step_download = true
       }
 
@@ -81,16 +93,12 @@ socket.addEventListener('open', () => {
     } else if (buffer[0] === 0x01) {
     } else if (buffer[0] === 0x10) {
       if (step_download) {
-        step_download_status.style.animation = ''
-        step_download_status.style.backgroundColor = 'var(--text_color)'
-
+        statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
       }
 
       if (!step_pack) {
-        step_pack_container.style.opacity = '1'
-        step_pack_status.style.animation = '1s flashing infinite'
-
+        statusAnimation(step_pack_container, step_pack_status, 'loading')
         step_pack = true
       }
 
@@ -102,20 +110,15 @@ socket.addEventListener('open', () => {
     } else if (buffer[0] === 0x11) {
     } else if (buffer[0] === 0x20) {
       if (step_download) {
-        step_download_status.style.animation = ''
-        step_download_status.style.backgroundColor = 'var(--text_color)'
-
+        statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
       }
       if (step_pack) {
-        step_pack_status.style.animation = ''
-        step_pack_status.style.backgroundColor = 'var(--text_color)'
-
+        statusAnimation(step_pack_container, step_pack_status, 'success')
         step_pack = false
       }
 
-      step_finish_container.style.opacity = '1'
-      step_finish_status.style.backgroundColor = 'var(--text_color)'
+      statusAnimation(step_finish_container, step_finish_status, 'success')
 
       const url = new TextDecoder().decode(buffer)
 
