@@ -5,11 +5,9 @@ import http from 'http'
 import path from 'path'
 import fs from 'fs'
 
-import nhget from '@icebrick/nhget'
+import nhget, { type GalleryData } from '@icebrick/nhget'
 import FileDownloader from '@icebrick/file-downloader'
 import Log from '@icebrick/log'
-
-import type { GalleryData } from './Types'
 
 /**
  * Start the WebSocket server

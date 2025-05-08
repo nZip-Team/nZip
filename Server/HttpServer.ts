@@ -4,12 +4,12 @@ import path from 'path'
 import fs from 'fs/promises'
 import { existsSync } from 'fs'
 
-import nhget from '@icebrick/nhget'
+import nhget, { type GalleryData } from '@icebrick/nhget'
 import Log from '@icebrick/log'
 
 import { Element, type ElementAttributes } from '@lightbery/scope'
 
-import type { Page, GalleryData } from './Types'
+import type { Page } from './Types'
 
 import HomePage from '../App/Pages/Home'
 import DownloadPage from '../App/Pages/Download'
@@ -76,14 +76,16 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
         await sendPage(res, ErrorPage, { error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?' })
       } else {
         const extension = response.images.pages[0].t === 'j' ? 'jpg' : response.images.pages[0].t === 'g' ? 'gif' : response.images.pages[0].t === 'w' ? 'webp' : 'png'
-        sendPage(res, DownloadPage, { id, title: response.title.english, cover: `${imageHost}/galleries/${response.media_id}/1.${extension}` })
+        const title = response.title.english || response.title.japanese || response.title.pretty || null
+        const cover = `${imageHost}/galleries/${response.media_id}/1.${extension}`
+        sendPage(res, DownloadPage, { id, title, cover })
       }
     } catch (error) {
       await sendPage(res, ErrorPage, { error: 'An error occurred while fetching the gallery.' })
     }
   })
 
-  app.get('/g/:id/*', (req, res) => {
+  app.get('/g/:id/*any', (req, res) => {
     res.redirect(`/g/${req.params.id}`)
   })
 
@@ -140,7 +142,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     await sendFile(res, path.join(__dirname, `${filePath}/robots.txt`))
   })
 
-  app.all('*', (_, res) => {
+  app.all('*any', (_, res) => {
     res.redirect('/error')
   })
 

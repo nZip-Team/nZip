@@ -36,7 +36,7 @@ async function start(): Promise<void> {
 
   if (development) {
     if (!fs.existsSync(path.join(__dirname, 'App', 'Scripts'))) return
-    let bundleTimeout: NodeJS.Timer | null = null
+    let bundleTimeout: NodeJS.Timeout | null = null
 
     fs.watch(path.join(__dirname, 'App', 'Scripts'), { recursive: true }, () => {
       if (bundleTimeout) {
