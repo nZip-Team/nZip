@@ -20,7 +20,8 @@ Scope.use({
 
       update()
 
-      scope.listen(window, 'resize', () => update())
+      scope.listen(window, 'load', update)
+      scope.listen(window, 'resize', update)
     })
   }
 })
