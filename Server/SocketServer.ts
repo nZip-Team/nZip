@@ -161,9 +161,9 @@ async function download(images: string[], hash: string, socket: WebSocket, filen
 }
 
 /**
- * 0x00: Start loading the images
- * 0x01: All images loaded
- * 0x02: All images zipped, download link
- * 0x10: Progress
- * 0x20: Error
+ * 0x00 Download progress
+ * 0x01 Download error
+ * 0x10 Pack progress
+ * 0x11 Pack error
+ * 0x20 Download link
  */
