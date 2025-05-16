@@ -6,7 +6,6 @@ bun install
 bun run bundle
 bun run build
 
-cp .npmrc dist
 cp package.json dist
 cp start.sh dist
 

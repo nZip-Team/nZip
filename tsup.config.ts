@@ -5,6 +5,5 @@ export default defineConfig({
   minify: true,
   sourcemap: true,
   clean: true,
-  noExternal: ['@lightbery/scope'],
   outDir: './dist'
 })
