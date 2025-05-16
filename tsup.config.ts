@@ -5,6 +5,6 @@ export default defineConfig({
   minify: true,
   sourcemap: true,
   clean: true,
-  noExternal: ['@icebrick/log', '@icebrick/nhget', '@icebrick/file-downloader', '@lightbery/scope'],
+  noExternal: ['@lightbery/scope'],
   outDir: './dist'
 })
