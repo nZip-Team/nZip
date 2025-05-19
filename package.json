@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "scripts": {
     "start": "bun Main.ts",
     "prebuild": "bun -e \"import Bundle from './Server/Bundle'; await Bundle();\"",
