@@ -3,8 +3,9 @@
   "version": "1.8.3",
   "scripts": {
     "start": "bun Main.ts",
+    "prebuild": "bun -e \"import Bundle from './Server/Bundle'; await Bundle();\"",
     "build": "tsup",
-    "bundle": "bun -e \"import Bundle from './Server/Bundle'; await Bundle();\""
+    "build:docker": "bun Scripts/build-docker.ts"
   },
   "dependencies": {
     "@icebrick/file-downloader": "^1.0.1",
@@ -15,15 +16,15 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "terser": "^5.39.2",
-    "tsup": "^8.4.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "ws": "^8.18.2",
     "yazl": "^3.3.1"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
-    "@types/express": "^5.0.1",
-    "@types/node": "^22.15.18",
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.19",
     "@types/ws": "^8.18.1",
     "@types/yazl": "^2.4.6"
   }

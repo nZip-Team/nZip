@@ -11,7 +11,7 @@ export default (args: { version: string }) => {
   return {
     title: 'nZip | Home',
     description: 'Easily download the doujinshi you like.',
-    keywords: 'nZip, nhentai, doujinshi, download, zip',
+    keywords: 'nZip, nhentai, hentai, doujinshi, download, zip',
     content: new Element('body', { style: { display: 'flex', flexDirection: 'column', center: 'horizontal vertical', backgroundColor: '$background_color', margin: '0px', width: '100dvw', height: '100dvh' } }, [
       new Element('div', { style: { position: 'fixed', display: 'flex', center: 'horizontal vertical', left: '0px', top: '0px', width: '100dvw', height: '100dvh', zIndex: '-1' } }, [
         new Element('h1', { id: 'text_sauce', class: 'text', style: { userSelect: 'none', fontSize: '20rem', opacity: '0.075' } })

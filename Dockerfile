@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 COPY . /workspace
 
-RUN sh build-docker.sh
+RUN sh Scripts/build-docker.sh
 
 FROM oven/bun:alpine
 

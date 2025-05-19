@@ -4,13 +4,13 @@ import path from 'path'
 import Log from '@icebrick/log'
 
 async function getPackageVersion(): Promise<string> {
-  const packageJsonPath = path.resolve(__dirname, 'package.json')
+  const packageJsonPath = path.resolve(__dirname, '../package.json')
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'))
   return packageJson.version
 }
 
 async function updateDockerfile(version: string): Promise<void> {
-  const dockerfilePath = path.resolve(__dirname, 'Dockerfile')
+  const dockerfilePath = path.resolve(__dirname, '../Dockerfile')
   const dockerfile = await readFile(dockerfilePath, 'utf-8')
   const updatedDockerfile = dockerfile.replace(/LABEL org\.opencontainers\.image\.version=".*"/, `LABEL org.opencontainers.image.version="${version}"`)
   await writeFile(dockerfilePath, updatedDockerfile)
