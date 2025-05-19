@@ -1,4 +1,4 @@
-import { Element } from '@lightbery/scope'
+import type { RenderScope } from '../../Server/Types'
 
 /**
  * Error page
@@ -7,7 +7,9 @@ import { Element } from '@lightbery/scope'
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { error: string }) => {
+export default (scope: RenderScope, args: { error: string }) => {
+  const { Element } = scope
+
   return {
     title: 'nZip | Error',
     description: 'Something went wrong.',

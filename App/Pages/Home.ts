@@ -1,4 +1,4 @@
-import { Element } from '@lightbery/scope'
+import type { RenderScope } from '../../Server/Types'
 
 /**
  * Home page
@@ -7,7 +7,9 @@ import { Element } from '@lightbery/scope'
  * @returns Object containing the page title, description, keywords and content
  */
 // prettier-ignore
-export default (args: { version: string }) => {
+export default (scope: RenderScope, args: { version: string }) => {
+  const { Element } = scope
+
   return {
     title: 'nZip | Home',
     description: 'Easily download the doujinshi you like.',

@@ -1,28 +1,28 @@
 import { Scope, Style } from '@lightbery/scope'
 
-Scope.use({
-  id: 'default',
+import type { ScriptScope } from '../Types'
 
-  initialize: scope => {
-    scope.AttributeManager.createAttribute('style:dynamic:minheight', (element, value) => {
-      // Update The Height
-      function update(): void {
-        let totalHeight: number = 0
+const scope: ScriptScope = new Scope(undefined)
 
-        for (const child of Array.from(element.children)) {
-          const bound = child.getBoundingClientRect()
+scope.AttributeManager.createAttribute('style:dynamic:minheight', {
+  script: (element, value) => {
+    // Update The Height
+    function update(): void {
+      let totalHeight: number = 0
 
-          totalHeight += bound.height
-        }
+      for (const child of Array.from(element.children)) {
+        const bound = child.element!.getBoundingClientRect()
 
-        element.style.minHeight = Style.parseStyleValue(value.replace('<height>', `${totalHeight}px`))
+        totalHeight += bound.height
       }
 
-      update()
+      element.style.minHeight = Style.parseValue(value.replace('<height>', `${totalHeight}px`))
+    }
 
-      scope.listen(window, 'load', update)
-      scope.listen(window, 'resize', update)
-    })
+    update()
+
+    element.listen(window, 'load', update)
+    element.listen(window, 'resize', update)
   }
 })
 

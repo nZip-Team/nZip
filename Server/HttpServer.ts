@@ -7,9 +7,9 @@ import { existsSync } from 'fs'
 import nhget, { type GalleryData } from '@icebrick/nhget'
 import Log from '@icebrick/log'
 
-import { Element, type ElementAttributes } from '@lightbery/scope'
+import { Scope, type ElementAttributes } from '@lightbery/scope'
 
-import type { Page } from './Types'
+import type { RenderScope, Page } from './Types'
 
 import HomePage from '../App/Pages/Home'
 import DownloadPage from '../App/Pages/Download'
@@ -21,6 +21,8 @@ let analytics: ElementAttributes | null = null
 
 let filePath = './App'
 if (existsSync(path.join(__dirname, '../App'))) filePath = '../App'
+
+const scope: RenderScope = new Scope(undefined)
 
 /**
  * Start the HTTP server
@@ -162,7 +164,8 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
 // prettier-ignore
 async function sendPage(res: http.ServerResponse, page: Page, args?: null | { [key: string]: any }): Promise<void> {
   try {
-    const Page = page(args)
+    const { Element } = scope
+    const Page = page(scope, args)
     const doctype = '<!DOCTYPE html>'
     const head = [
       new Element('title', { innerHTML: Page.title }),

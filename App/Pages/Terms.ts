@@ -1,11 +1,13 @@
-import { Element } from '@lightbery/scope'
+import type { RenderScope } from '../../Server/Types'
 
 /**
  * Terms of Service page
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default () => {
+export default (scope: RenderScope) => {
+  const { Element } = scope
+
   return {
     title: 'nZip | Terms of Service',
     description: 'Terms of Service of nZip',

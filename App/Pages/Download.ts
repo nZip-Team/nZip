@@ -1,4 +1,4 @@
-import { Element } from '@lightbery/scope'
+import type { RenderScope } from '../../Server/Types'
 
 /**
  * Download page
@@ -9,7 +9,9 @@ import { Element } from '@lightbery/scope'
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { id: string, title: string, cover: string }) => {
+export default (scope: RenderScope, args: { id: string, title: string, cover: string }) => {
+  const { Element } = scope
+
   return {
     title: `nZip | ${args.id}`,
     description: args.title,
@@ -65,7 +67,7 @@ export default (args: { id: string, title: string, cover: string }) => {
           }
         }
       `}),
-      new Element('script', { src: '/Scripts/Download.mjs' })
+      new Element('script', { type: 'module', src: '/Scripts/Download.mjs' })
     ])
   }
 }
