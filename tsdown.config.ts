@@ -1,9 +1,10 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from 'tsdown'
 
 export default defineConfig({
   entry: ['./Main.ts'],
+  format: 'cjs',
   minify: true,
   sourcemap: true,
-  clean: true,
+  clean: false,
   outDir: './dist'
 })

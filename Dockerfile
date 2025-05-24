@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 COPY . /workspace
 
-RUN sh Scripts/build-docker.sh
+RUN bun run build
 
 FROM oven/bun:alpine
 
@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.url="https://ghcr.io/nzip-team/nzip"
 LABEL org.opencontainers.image.source="https://github.com/nZip-Team/nZip"
 LABEL org.opencontainers.image.title="nZip"
 LABEL org.opencontainers.image.description="Download doujinshis from nhentai.net as a zip archive."
-LABEL org.opencontainers.image.version="1.8.4"
+LABEL org.opencontainers.image.version="1.8.5"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.revision=""
 LABEL org.opencontainers.image.created=""

@@ -5,7 +5,7 @@ import type { ScriptScope } from '../Types'
 const scope: ScriptScope = new Scope(undefined)
 
 scope.AttributeManager.createAttribute('style:dynamic:minheight', {
-  script: (element, value) => {
+  script: (_, element, value) => {
     // Update The Height
     function update(): void {
       let totalHeight: number = 0
@@ -21,8 +21,8 @@ scope.AttributeManager.createAttribute('style:dynamic:minheight', {
 
     update()
 
-    element.listen(window, 'load', update)
-    element.listen(window, 'resize', update)
+    element.ListenerManager.createListener(window, 'load', update)
+    element.ListenerManager.createListener(window, 'resize', update)
   }
 })
 

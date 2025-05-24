@@ -1,4 +1,4 @@
 #!/bin/sh
 
-bun install --omit dev
+bun install -p
 bun Main.js
