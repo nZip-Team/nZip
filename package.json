@@ -3,9 +3,9 @@
   "version": "1.8.6",
   "scripts": {
     "start": "bun Main.ts",
-    "prebuild": "sh Scripts/pre-build.sh",
+    "prebuild": "bun Scripts/pre-build.ts",
     "build": "tsdown",
-    "postbuild": "sh Scripts/post-build.sh",
+    "postbuild": "bun Scripts/post-build.ts",
     "build:docker": "bun Scripts/build-docker.ts"
   },
   "dependencies": {
@@ -14,9 +14,7 @@
     "@icebrick/nhget": "^1.0.4",
     "@lightbery/scope": "^1.0.7",
     "bun": "^1.2.14",
-    "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "terser": "^5.39.2",
     "tsdown": "^0.12.3",
     "typescript": "^5.8.3",
     "ws": "^8.18.2",
@@ -25,7 +23,6 @@
   "devDependencies": {
     "@types/bun": "^1.2.14",
     "@types/express": "^5.0.2",
-    "@types/node": "^22.15.21",
     "@types/ws": "^8.18.1",
     "@types/yazl": "^2.4.6"
   }

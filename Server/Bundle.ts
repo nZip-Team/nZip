@@ -22,7 +22,6 @@ export default async (): Promise<void> => {
     scripts.push(path.resolve(__dirname, `./Scripts/${fileName}`).split(win32.sep).join(posix.sep))
   }
 
-  Log.info('Bundling scripts...')
   await build({
     entry: scripts,
     outDir: path.join(__dirname, '../App/Scripts'),

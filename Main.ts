@@ -1,13 +1,11 @@
-import path from 'path'
 import fs from 'fs'
+import path from 'path'
 
 import startHttpServer from './Server/HttpServer'
 import startSocket from './Server/SocketServer'
 import bundle from './Server/Bundle'
 
 import { version } from './package.json'
-
-import 'dotenv/config'
 
 const httpHost = process.env['HOST'] || 'http://localhost'
 const httpPort = parseInt(process.env['PORT'] || '3000')
