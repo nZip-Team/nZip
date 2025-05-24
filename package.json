@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "scripts": {
     "start": "bun Main.ts",
     "prebuild": "sh Scripts/pre-build.sh",
@@ -9,8 +9,8 @@
     "build:docker": "bun Scripts/build-docker.ts"
   },
   "dependencies": {
-    "@icebrick/file-downloader": "^1.0.2",
-    "@icebrick/log": "^1.1.4",
+    "@icebrick/file-downloader": "^1.0.3",
+    "@icebrick/log": "^1.1.5",
     "@icebrick/nhget": "^1.0.4",
     "@lightbery/scope": "^1.0.7",
     "bun": "^1.2.14",

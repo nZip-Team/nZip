@@ -26,7 +26,7 @@ scope.AttributeManager.createAttribute('style:dynamic:minheight', {
   }
 })
 
-new Scope(document.body)
+scope.mountElement(document.body)
 
 type States = 'loading' | 'success'
 
