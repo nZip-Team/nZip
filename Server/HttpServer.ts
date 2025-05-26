@@ -83,7 +83,13 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
         sendPage(res, DownloadPage, { id, title, cover })
       }
     } catch (error) {
-      await sendPage(res, ErrorPage, { error: 'An error occurred while fetching the gallery.' })
+      if (error instanceof Error) {
+        if (error.message.includes('Not Found') || error.message.includes('does not exist')) {
+          await sendPage(res, ErrorPage, { error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?' })
+        } else {
+          await sendPage(res, ErrorPage, { error: 'An error occurred while fetching the gallery.' })
+        }
+      }
     }
   })
 
@@ -99,7 +105,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       await fs.access(filePath)
       await sendFile(res, filePath)
     } catch {
-      await sendPage(res, ErrorPage, { error: 'Bro what are you trying to download? <a href="/g/228922">this</a>?' })
+      await sendPage(res, ErrorPage, { error: 'That file does not exist. You can go back <a href="/">home</a> and get a new link.' })
     }
   })
 

@@ -54,19 +54,6 @@ export default (scope: RenderScope, args: { id: string, title: string, cover: st
           ])
         ])
       ]),
-      new Element('style', { innerHTML: `
-        @media (max-width: 700px) {
-          .cover-image {
-            height: 90dvw !important;
-          }
-          .text.title {
-            max-width: 90vw !important;
-          }
-          .progress-container {
-            margin-top: 2rem !important;
-          }
-        }
-      `}),
       new Element('script', { type: 'module', src: '/Scripts/Download.mjs' })
     ])
   }

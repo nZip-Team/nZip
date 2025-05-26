@@ -43,3 +43,15 @@ a {
     transform: rotate3d(0, 1, 0, 360deg);
   }
 }
+
+@media (max-width: 700px) {
+  .cover-image {
+    height: 90dvw !important;
+  }
+  .text.title {
+    max-width: 90vw !important;
+  }
+  .progress-container {
+    margin-top: 2rem !important;
+  }
+}

@@ -50,7 +50,7 @@ const step_pack_container = document.getElementById('step-pack-container') as HT
 const step_pack_status = document.getElementById('step-pack-status') as HTMLDivElement
 const step_finish_container = document.getElementById('step-finish-container') as HTMLDivElement
 const step_finish_status = document.getElementById('step-finish-status') as HTMLDivElement
-const progress_text = document.getElementById('progress-text') as HTMLElement
+const progress_text = document.getElementById('progress-text') as HTMLHeadingElement
 const progress_result = document.getElementById('progress-result') as HTMLLinkElement
 const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 
