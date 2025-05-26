@@ -7,4 +7,4 @@ await $`cp Scripts/start.sh dist`
 
 await $`bun install`
 
-import Bundle from '../Server/Bundle'; await Bundle();
+await $`bun -e "import Bundle from './Server/Bundle'; await Bundle();"`
