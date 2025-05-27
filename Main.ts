@@ -33,7 +33,7 @@ async function start(): Promise<void> {
   startSocket(server, apiHost, imageHost)
 
   if (development) {
-    if (!fs.existsSync(path.join(__dirname, 'App', 'Scripts'))) return
+    if (!fs.existsSync(path.join(__dirname, 'Server', 'Scripts'))) return
     let bundleTimeout: NodeJS.Timeout | null = null
 
     fs.watch(path.join(__dirname, 'Server', 'Scripts'), { recursive: true }, () => {

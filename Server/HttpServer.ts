@@ -2,20 +2,52 @@ import express from 'express'
 import http from 'http'
 import path from 'path'
 import fs from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, watch } from 'fs'
 
 import nhget, { type GalleryData } from '@icebrick/nhget'
 import Log from '@icebrick/log'
 
 import { Scope, type ElementAttributes } from '@lightbery/scope'
 
-import type { RenderScope, Page } from './Types'
+import type { RenderScope, Page as PageModule } from './Types'
 
-import HomePage from '../App/Pages/Home'
-import DownloadPage from '../App/Pages/Download'
-import ErrorPage from '../App/Pages/Error'
-import TermsPage from '../App/Pages/Terms'
-import PrivacyPage from '../App/Pages/Privacy'
+const PAGE_NAMES = ['Home', 'Download', 'Error', 'Terms', 'Privacy'] as const
+
+type PageName = typeof PAGE_NAMES[number]
+
+const Pages: Record<PageName, PageModule> = {} as Record<PageName, PageModule>
+const CachedPages: Record<PageName, PageModule | null> = {} as Record<PageName, PageModule | null>
+
+PAGE_NAMES.forEach(name => {
+  Pages[name] = null as unknown as PageModule
+  CachedPages[name] = null
+})
+
+function loadPages() {
+  if (process.env['NODE_ENV'] === 'development') {
+    Object.keys(require.cache).forEach(key => {
+      if (key.includes('Pages')) {
+        delete require.cache[key]
+      }
+    })
+  }
+
+  for (const page of PAGE_NAMES) {
+    try {
+      const module = require(`../App/Pages/${page}`).default as PageModule
+      Pages[page] = module
+      CachedPages[page] = module
+    } catch (error) {
+      Log.error(`Failed to load ${page} page`, error)
+      if (CachedPages[page]) {
+        Pages[page] = CachedPages[page] as PageModule
+        Log.info(`Using cached version of ${page} page`)
+      }
+    }
+  }
+}
+
+loadPages()
 
 let analytics: ElementAttributes | null = null
 
@@ -44,6 +76,24 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   const app = express()
   const server = http.createServer(app)
 
+  if (process.env['NODE_ENV'] === 'development') {
+    const pagesDir = path.join(__dirname, '../App/Pages')
+    if (existsSync(pagesDir)) {
+      watch(pagesDir, (eventType, filename) => {
+        if (filename && eventType === 'change') {
+          Log.info(`Page file changed: ${filename} - reloading...`)
+          try {
+            loadPages()
+            Log.success('Pages reloaded successfully')
+          } catch (error) {
+            Log.error('Failed to reload pages:', error)
+          }
+        }
+      })
+      Log.info('Hot reloading enabled for page files')
+    }
+  }
+
   app.use((req, res, next) => {
     res.setHeader('X-Powered-By', 'nZip')
     res.on('finish', () => {
@@ -53,21 +103,21 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   })
 
   app.get(['/', '/home'], async (_, res) => {
-    sendPage(res, HomePage, { version })
+    sendPage(res, Pages['Home'], { version })
   })
 
   app.get('/terms', async (_, res) => {
-    sendPage(res, TermsPage)
+    sendPage(res, Pages['Terms'])
   })
 
   app.get('/privacy', async (_, res) => {
-    sendPage(res, PrivacyPage)
+    sendPage(res, Pages['Privacy'])
   })
 
   app.get('/g/:id', async (req, res) => {
     let id = req.params.id
     if (!Number(id)) {
-      sendPage(res, ErrorPage, { error: "That's not a Number 😭" })
+      sendPage(res, Pages['Error'], { error: "That's not a Number 😭" })
       return
     }
 
@@ -75,19 +125,19 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       const response: GalleryData = (await nh.get(id)) as GalleryData
 
       if (response.error) {
-        await sendPage(res, ErrorPage, { error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?' })
+        await sendPage(res, Pages['Error'], { error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?' })
       } else {
         const extension = response.images.pages[0].t === 'j' ? 'jpg' : response.images.pages[0].t === 'g' ? 'gif' : response.images.pages[0].t === 'w' ? 'webp' : 'png'
         const title = response.title.english || response.title.japanese || response.title.pretty || null
         const cover = `${imageHost}/galleries/${response.media_id}/1.${extension}`
-        sendPage(res, DownloadPage, { id, title, cover })
+        sendPage(res, Pages['Download'], { id, title, cover })
       }
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('Not Found') || error.message.includes('does not exist')) {
-          await sendPage(res, ErrorPage, { error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?' })
+          await sendPage(res, Pages['Error'], { error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?' })
         } else {
-          await sendPage(res, ErrorPage, { error: 'An error occurred while fetching the gallery.' })
+          await sendPage(res, Pages['Error'], { error: 'An error occurred while fetching the gallery.' })
         }
       }
     }
@@ -105,7 +155,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       await fs.access(filePath)
       await sendFile(res, filePath)
     } catch {
-      await sendPage(res, ErrorPage, { error: 'That file does not exist. You can go back <a href="/">home</a> and get a new link.' })
+      await sendPage(res, Pages['Error'], { error: 'That file does not exist. You can go back <a href="/">home</a> and get a new link.' })
     }
   })
 
@@ -116,7 +166,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       await fs.access(scriptPath)
       await sendFile(res, scriptPath)
     } catch {
-      await sendPage(res, ErrorPage, { error: "console.error('Script Not Found')" })
+      await sendPage(res, Pages['Error'], { error: "console.error('Script Not Found')" })
     }
   })
 
@@ -127,7 +177,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       await fs.access(stylePath)
       await sendFile(res, stylePath)
     } catch {
-      await sendPage(res, ErrorPage, { error: 'What style? You mean <a href="/g/228922">this</a>?' })
+      await sendPage(res, Pages['Error'], { error: 'What style? You mean <a href="/g/228922">this</a>?' })
     }
   })
 
@@ -138,12 +188,12 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       await fs.access(imagePath)
       await sendFile(res, imagePath)
     } catch {
-      await sendPage(res, ErrorPage, { error: "The image you're trying find does not exist. You probably have some mental disorders, please contact your doctor for professional help." })
+      await sendPage(res, Pages['Error'], { error: "The image you're trying find does not exist. You probably have some mental disorders, please contact your doctor for professional help." })
     }
   })
 
   app.get('/error', async (_, res) => {
-    sendPage(res, ErrorPage, { error: 'Don\'t tell anyone but I got some <a href="/g/228922">good stuff</a> for you :)' })
+    sendPage(res, Pages['Error'], { error: 'Don\'t tell anyone but I got some <a href="/g/228922">good stuff</a> for you :)' })
   })
 
   app.get('/robots.txt', async (_, res) => {
@@ -168,7 +218,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
  * @param args - Optional arguments to pass to the page function.
  */
 // prettier-ignore
-async function sendPage(res: http.ServerResponse, page: Page, args?: null | { [key: string]: any }): Promise<void> {
+async function sendPage(res: http.ServerResponse, page: PageModule, args?: null | Record<string, unknown>): Promise<void> {
   try {
     const { Element } = scope
     const Page = page(scope, args)
