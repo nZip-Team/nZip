@@ -12,16 +12,16 @@
     "@icebrick/file-downloader": "^1.1.0",
     "@icebrick/log": "^1.1.5",
     "@icebrick/nhget": "^1.0.4",
-    "@lightbery/scope": "^1.0.7",
-    "bun": "^1.2.14",
+    "@lightbery/scope": "^1.0.8",
+    "bun": "^1.2.15",
     "express": "^5.1.0",
-    "tsdown": "^0.12.3",
+    "tsdown": "^0.12.4",
     "typescript": "^5.8.3",
     "ws": "^8.18.2",
     "yazl": "^3.3.1"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.14",
+    "@types/bun": "^1.2.15",
     "@types/express": "^5.0.2",
     "@types/ws": "^8.18.1",
     "@types/yazl": "^3.3.0"
