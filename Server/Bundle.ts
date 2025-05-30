@@ -27,7 +27,7 @@ export default async (): Promise<void> => {
     outDir: path.join(__dirname, '../App/Scripts'),
 
     format: 'esm',
-    target: 'browser',
+    target: ['chrome100', 'safari18', 'firefox110'],
     minify: true,
 
     silent: true,

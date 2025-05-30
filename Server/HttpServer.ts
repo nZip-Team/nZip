@@ -11,6 +11,9 @@ import { Scope, type ElementAttributes } from '@lightbery/scope'
 
 import type { RenderScope, Page as PageModule } from './Types'
 
+let filePath = './App'
+if (existsSync(path.join(__dirname, '../App'))) filePath = '../App'
+
 const PAGE_NAMES = ['Home', 'Download', 'Error', 'Terms', 'Privacy'] as const
 
 type PageName = typeof PAGE_NAMES[number]
@@ -32,11 +35,13 @@ function loadPages() {
     })
   }
 
+  Log.info('Loading pages...')
   for (const page of PAGE_NAMES) {
     try {
-      const module = require(`../App/Pages/${page}`).default as PageModule
+      const module = require(`${filePath}/Pages/${page}`).default as PageModule
       Pages[page] = module
       CachedPages[page] = module
+      Log.success(`Loaded ${page} page`)
     } catch (error) {
       Log.error(`Failed to load ${page} page`, error)
       if (CachedPages[page]) {
@@ -50,9 +55,6 @@ function loadPages() {
 loadPages()
 
 let analytics: ElementAttributes | null = null
-
-let filePath = './App'
-if (existsSync(path.join(__dirname, '../App'))) filePath = '../App'
 
 const scope: RenderScope = new Scope(undefined)
 
@@ -77,7 +79,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   const server = http.createServer(app)
 
   if (process.env['NODE_ENV'] === 'development') {
-    const pagesDir = path.join(__dirname, '../App/Pages')
+    const pagesDir = path.join(__dirname, `${filePath}/Pages`)
     if (existsSync(pagesDir)) {
       watch(pagesDir, (eventType, filename) => {
         if (filename && eventType === 'change') {
