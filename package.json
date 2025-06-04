@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.8.7",
+  "version": "1.8.8",
   "scripts": {
     "start": "bun Main.ts",
     "prebuild": "bun Scripts/pre-build.ts",
@@ -12,10 +12,10 @@
     "@icebrick/file-downloader": "^1.1.0",
     "@icebrick/log": "^1.1.5",
     "@icebrick/nhget": "^1.0.4",
-    "@lightbery/scope": "^1.0.8",
+    "@lightbery/scope": "^1.0.9",
     "bun": "^1.2.15",
     "express": "^5.1.0",
-    "tsdown": "^0.12.4",
+    "tsdown": "^0.12.6",
     "typescript": "^5.8.3",
     "ws": "^8.18.2",
     "yazl": "^3.3.1"
