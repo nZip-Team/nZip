@@ -38,7 +38,8 @@ function loadPages() {
   Log.info('Loading pages...')
   for (const page of PAGE_NAMES) {
     try {
-      const module = require(`${filePath}/Pages/${page}`).default as PageModule
+      const rawmodule = require(`${filePath}/Pages/${page}`)
+      const module = rawmodule.default || rawmodule
       Pages[page] = module
       CachedPages[page] = module
       Log.success(`Loaded ${page} page`)
@@ -50,6 +51,9 @@ function loadPages() {
       }
     }
   }
+
+  Log.success('All pages loaded successfully')
+  Log.info(`Available pages: ${PAGE_NAMES.join(', ')}`)
 }
 
 loadPages()
