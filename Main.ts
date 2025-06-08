@@ -45,4 +45,4 @@ async function start(): Promise<void> {
   }
 }
 
-start() // Where all the magic happens
+start() // Where All Miracles Begin
