@@ -5,7 +5,7 @@ export default defineConfig({
   outDir: './dist',
 
   format: 'cjs',
-  minify: true,
+  minify: false,
 
   sourcemap: false,
   clean: false,

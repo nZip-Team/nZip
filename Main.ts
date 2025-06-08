@@ -1,8 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-import startHttpServer from './Server/HttpServer'
-import startSocket from './Server/SocketServer'
+import Server from './Server/Server'
 import bundle from './Server/Bundle'
 
 import { version } from './package.json'
@@ -29,8 +28,7 @@ if (fs.existsSync(path.join(__dirname, 'Cache', 'Downloads'))) fs.rmSync(path.jo
 async function start(): Promise<void> {
   await bundle()
 
-  const server = startHttpServer(httpHost, httpPort, apiHost, imageHost, analytics, version)
-  startSocket(server, apiHost, imageHost)
+  Server(httpHost, httpPort, apiHost, imageHost, analytics, version)
 
   if (development) {
     if (!fs.existsSync(path.join(__dirname, 'Server', 'Scripts'))) return
@@ -47,4 +45,4 @@ async function start(): Promise<void> {
   }
 }
 
-start()
+start() // Where all the magic happens

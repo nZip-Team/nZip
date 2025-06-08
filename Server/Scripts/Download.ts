@@ -1,11 +1,11 @@
-import { Scope, Style } from '@lightbery/scope'
+import { Scope } from '@lightbery/scope'
 
 import type { ScriptScope } from '../Types'
 
 const scope: ScriptScope = new Scope(undefined)
 
 scope.AttributeManager.createAttribute('style:dynamic:minheight', {
-  script: (_, element, value) => {
+  script: (scope, element, value) => {
     // Update The Height
     function update(): void {
       let totalHeight: number = 0
@@ -16,7 +16,7 @@ scope.AttributeManager.createAttribute('style:dynamic:minheight', {
         totalHeight += bound.height
       }
 
-      element.style.minHeight = Style.parseValue(value.replace('<height>', `${totalHeight}px`))
+      element.style.minHeight = scope.Style.parseValue(value.replace('<height>', `${totalHeight}px`))
     }
 
     update()
@@ -54,7 +54,7 @@ const progress_text = document.getElementById('progress-text') as HTMLHeadingEle
 const progress_result = document.getElementById('progress-result') as HTMLLinkElement
 const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 
-const socket = new WebSocket(window.location.href)
+const socket = new WebSocket(window.location.href.replace(/\/g\//, '/ws/g/'))
 
 socket.addEventListener('open', () => {
   step_connect_status.style.animation = ''
