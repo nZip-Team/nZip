@@ -173,7 +173,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     } catch {
       c.status(404)
       return c.html(renderPage('Error', { 
-        error: 'What style? You mean <a href="/g/228922">this</a>?' 
+        error: 'What style? Do you mean <a href="/g/228922">this</a>?' 
       }))
     }
   })
@@ -197,7 +197,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     } catch {
       c.status(404)
       return c.html(renderPage('Error', { 
-        error: "The image you're trying find does not exist. You probably have some mental disorders, please contact your doctor for professional help." 
+        error: "The image you're trying to find does not exist. You probably have some mental disorders, please contact your doctor for professional help." 
       }))
     }
   })

@@ -135,12 +135,12 @@ socket.addEventListener('open', () => {
   })
 })
 
-let blured: boolean = true
+let blurred: boolean = true
 
 image_cover.addEventListener('click', () => {
-  image_cover.style.filter = blured ? 'blur(0px)' : 'blur(2.5px)'
+  image_cover.style.filter = blurred ? 'blur(0px)' : 'blur(2.5px)'
 
-  blured = !blured
+  blurred = !blurred
 })
 
 image_cover.addEventListener('load', () => {
