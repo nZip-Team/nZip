@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "scripts": {
     "start": "bun Main.ts",
     "dev": "bun Main.ts",
@@ -11,16 +11,13 @@
     "dev:docker": "docker compose -f compose.dev.yml up --build"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.4",
-    "@hono/node-ws": "^1.1.6",
     "@icebrick/file-downloader": "^1.1.0",
     "@icebrick/log": "^1.1.5",
     "@icebrick/nhget": "^1.0.4",
     "@lightbery/scope": "^1.1.0",
-    "bun": "^1.2.15",
+    "bun": "^1.2.16",
     "hono": "^4.7.11",
     "tsdown": "^0.12.7",
-    "typescript": "^5.8.3",
     "yazl": "^3.3.1"
   },
   "devDependencies": {

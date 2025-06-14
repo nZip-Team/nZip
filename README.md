@@ -8,8 +8,8 @@ nZip is a convenient tool for downloading doujinshi from nhentai.net as a zip ar
 
 ## How to Use
 
-1. **Modify the URL**: To download a doujinshi, simply replace `.net` with `.zip` in the URL. For example, to download the doujinshi at [https://nhentai.net/g/228922](https://nhentai.net/g/228922), you would navigate to [https://nhentai.zip/g/228922](https://nhentai.zip/g/228922).
-   
+1. **Modify the URL**: To download a doujinshi, simply replace `.net` with `.zip` in the URL. For example, to download the doujinshi at `https://nhentai.net/g/228922`, you would navigate to `https://nhentai.zip/g/228922`.
+
 2. **Direct ID Input**: Alternatively, you can enter the doujinshi ID directly on the nZip homepage to generate your zip archive.
 
 3. **Download the Archive**: Once you have entered the URL or ID, it will automatically fetch the images and download the archive.
@@ -27,18 +27,49 @@ curl -o- https://get.docker.com | bash
 wget -qO- https://get.docker.com | bash
 ```
 
-Next, clone the repository and navigate to the project directory:
+Next, create a directory for the Docker configuration files:
 
 ```bash
-git clone https://github.com/nZip-Team/nZip.git
-cd nZip
+mkdir nzip
+cd nzip
 ```
 
-Clone the `.env.example` file and rename it to `.env` and configure the environment variables:
+Then, create a `compose.yml` file in the `nzip` directory with the following content:
 
-```bash
-cp .env.example .env
-nano .env
+```yaml
+services:
+  nzip-server:
+    container_name: nzip-server
+    image: ghcr.io/nzip-team/nzip:latest
+    ports:
+      - '3000:3000'
+    environment:
+      - HOST=${HOST}
+      - PORT=${PORT}
+      - API_URL=${API_URL}
+      - IMAGE_URL=${IMAGE_URL}
+      - ANALYTICS=${ANALYTICS}
+      - NODE_ENV=${NODE_ENV}
+    network_mode: bridge
+    restart: unless-stopped
+```
+
+Create a `.env` file and configure the environment variables:
+
+```sh
+# Set the host and port for the nZip server (Host is the URL where the server will be accessible)
+HOST=http://localhost:3000
+PORT=3000
+
+# Both API_URL and IMAGE_URL must be set to start the server
+API_URL=
+IMAGE_URL=
+
+# Optional
+ANALYTICS= 
+
+# Set to production if you want to run the server in production mode
+NODE_ENV=development
 ```
 
 Then, run the following command to run the Docker container:
@@ -53,11 +84,6 @@ Or use the following command to run the container in the background:
 docker compose up -d
 ```
 
-If you want to run the development version in docker, use the following command instead:
-```bash
-docker compose -f compose.dev.yml up --build
-```
-
 The nZip service should now be running on port 3000.
 
 ### Using Bun
@@ -66,15 +92,8 @@ Follow the instructions in the [Development](#development) section to run the pr
 
 ## Development
 
-nZip is built using TypeScript and Bun. To run the project locally, clone the repository and execute the following commands after configuring the `.env` file:
+nZip is built using TypeScript and [Bun](https://bun.sh/). To run the project locally, clone the repository and execute the following commands after configuring the `.env` file:
 
-With npm:
-```bash
-npm install -D
-npm run start
-```
-
-With bun:
 ```bash
 bun install
 bun start

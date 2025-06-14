@@ -79,7 +79,8 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
           error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?'
         }))
       } else {
-        const extension = response.images.pages[0].t === 'j' ? 'jpg' : response.images.pages[0].t === 'g' ? 'gif' : response.images.pages[0].t === 'w' ? 'webp' : 'png'
+        const type = response.images.pages[0].t
+        const extension = type === 'j' ? 'jpg' : type === 'g' ? 'gif' : type === 'w' ? 'webp' : 'png'
         const title = response.title.english || response.title.japanese || response.title.pretty || null
         const cover = `${imageHost}/galleries/${response.media_id}/1.${extension}`
         return c.html(renderPage('Download', { id, title, cover }))
@@ -111,15 +112,21 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   }))
 
   app.get('/download/:hash/:file', async (c) => {
-    const filePath = path.join(__dirname, 'Cache', 'Downloads', c.req.param('hash'), c.req.param('file'))
-
     try {
-      if (!c.req.param('file').endsWith('.zip')) throw new Error('Invalid File')
-      if (!await Bun.file(filePath).exists()) throw new Error('File does not exist')
+      const hash = c.req.param('hash')
+      const fileName = c.req.param('file')
+
+      const filePath = sanitizePath(hash, 'Cache/Downloads')
+      const fileLoc = sanitizePath(fileName, `Cache/Downloads/${hash}`)
+
+      if (!filePath || !fileLoc) throw true
+
+      if (!fileName.endsWith('.zip')) throw new Error('Invalid File')
+      if (!await Bun.file(fileLoc).exists()) throw new Error('File does not exist')
 
       const [ start, end ] = parseRangeHeader(c.req.header('Range'))
 
-      const file = Bun.file(filePath)
+      const file = Bun.file(fileLoc)
       return new Response(file.slice(start, end))
     } catch {
       c.status(404)
@@ -130,17 +137,19 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   })
 
   app.get('/Scripts/:script', async (c) => {
-    const scriptName = c.req.param('script')
-    const scriptPath = path.join(__dirname, `${filePath}/Scripts`, scriptName)
-
     try {
+      const scriptName = c.req.param('script')
+      const scriptPath = sanitizePath(scriptName, `${filePath}/Scripts`)
+
+      if (!scriptPath) throw true
+
       if (!await Bun.file(scriptPath).exists()) throw new Error('Script does not exist')
       return new Response(Bun.file(scriptPath), {
         headers: {
           'Content-Type': 'text/javascript'
         }
       })
-    } catch (error) {
+    } catch {
       c.status(404)
       return c.html(renderPage('Error', { 
         error: "console.error('Script Not Found')" 
@@ -149,17 +158,19 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   })
 
   app.get('/Styles/:style', async (c) => {
-    const styleName = c.req.param('style')
-    const stylePath = path.join(__dirname, `${filePath}/Styles`, styleName)
-
     try {
+      const styleName = c.req.param('style')
+      const stylePath = sanitizePath(styleName, `${filePath}/Styles`)
+
+      if (!stylePath) throw true
+
       if (!await Bun.file(stylePath).exists()) throw new Error('Style does not exist')
       return new Response(Bun.file(stylePath), {
         headers: {
           'Content-Type': 'text/css'
         }
       })
-    } catch (error) {
+    } catch {
       c.status(404)
       return c.html(renderPage('Error', { 
         error: 'What style? You mean <a href="/g/228922">this</a>?' 
@@ -168,10 +179,14 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   })
 
   app.get('/Images/:image', async (c) => {
-    const imageName = c.req.param('image')
-    const imagePath = path.join(__dirname, `${filePath}/Images`, imageName)
-
     try {
+      const imageName = c.req.param('image')
+      const imagePath = sanitizePath(imageName, `${filePath}/Images`)
+
+      if (!imagePath) {
+        throw new Error()
+      }
+
       if (!await Bun.file(imagePath).exists()) throw new Error('Image does not exist')
       const bunFile = Bun.file(imagePath)
       return new Response(bunFile, {
@@ -179,7 +194,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
           'Content-Type': bunFile.type
         }
       })
-    } catch (error) {
+    } catch {
       c.status(404)
       return c.html(renderPage('Error', { 
         error: "The image you're trying find does not exist. You probably have some mental disorders, please contact your doctor for professional help." 
@@ -214,7 +229,19 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     }
   })
 
-  app.notFound((c) => {
+  app.get('/:epic{^wp.+}', (_c) => {
+    return textResponse('Consider fucking off, this isn\'t WordPress. Who the hell uses WordPress in this year?')
+  })
+
+  app.get('/:epic{.+\.php}', (_c) => {
+    return textResponse('PHP? What is this, 2005? Please use modern technologies such as Node.js or Bun instead :)')
+  })
+
+  app.get('/.env', (_c) => {
+    return textResponse('XAI_API_KEY=xyzFUCKOFF7890abcdef123456\nOPENAI_API_KEY=sk-YOUSUCK1234567890nonsense\nGITHUB_API_TOKEN=ghp_GETREKT0987654321haha\nAWS_ACCESS_KEY=AKIAYOULOSER1234567890\nAWS_SECRET_KEY=3210YOUREDONE987654321xyz\nNODE_ENV=production', 50)
+  })
+
+  app.notFound(async (c) => {
     return c.redirect('/error')
   })
 
@@ -265,6 +292,74 @@ function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
     return [startNum, endNum]
   } catch (error) {
     return [0, Infinity]
+  }
+}
+
+/**
+ * Sanitize a user input path to prevent directory traversal attacks
+ * @param userInput The user input path
+ * @param baseDir The base directory to resolve against
+ * @returns The sanitized path or null if the path is invalid
+ */
+function sanitizePath(userInput: string, baseDir: string): string | null {
+  const sanitized = userInput.replace(/\.\./g, '').replace(/\\/g, '/')
+  
+  const fullPath = path.resolve(path.join(__dirname, baseDir, sanitized))
+  const basePath = path.resolve(path.join(__dirname, baseDir))
+  
+  if (!fullPath.startsWith(basePath)) {
+    return null
+  }
+  
+  return fullPath
+}
+
+/**
+ * Convert a text to a ReadableStream
+ * @param text The text to convert
+ * @returns A ReadableStream containing the text
+ */
+function textResponse(text: string, delay: number = 100): Response {
+  try {
+    const stream = new ReadableStream({
+      start(controller) {
+        let index = 0
+        let isClosed = false
+        
+        const interval = setInterval(() => {
+          if (isClosed) {
+            clearInterval(interval)
+            return
+          }
+          
+          if (index < text.length) {
+            try {
+              controller.enqueue(new TextEncoder().encode(text[index]))
+              index++
+            } catch {
+              isClosed = true
+              clearInterval(interval)
+            }
+          } else {
+            isClosed = true
+            clearInterval(interval)
+            try {
+              controller.close()
+            } catch {}
+          }
+        }, delay)
+      }
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache'
+      }
+    })
+  } catch {
+    return new Response('Internal Server Error')
   }
 }
 

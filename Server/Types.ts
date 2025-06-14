@@ -7,7 +7,7 @@ type Page = (scope: RenderScope, args?: any) => {
   title: string
   description: string
   keywords?: string
-  content?: Element<RenderScope>
+  content: Element<RenderScope>
 }
 
 export type { RenderScope, ScriptScope, Page }

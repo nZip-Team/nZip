@@ -9,12 +9,18 @@ const PAGE_NAMES = ['Home', 'Download', 'Error', 'Terms', 'Privacy'] as const
 
 type PageName = typeof PAGE_NAMES[number]
 
+/**
+ * Pages class to manage and load page modules dynamically.
+ */
 class Pages {
   private pageModules: Record<PageName, PageModule>
   private cachedPages: Record<PageName, PageModule | null>
   private filePath: string
   private watcher: FSWatcher | null = null
 
+  /**
+   * Creates an instance of Pages.
+   */
   constructor() {
     this.pageModules = {} as Record<PageName, PageModule>
     this.cachedPages = {} as Record<PageName, PageModule | null>
@@ -31,6 +37,10 @@ class Pages {
     this.setupHotReload()
   }
 
+  /**
+   * Loads all page modules from the specified directory.
+   * If a page fails to load, it will use the cached version if available.
+   */
   private loadPages(): void {
     if (process.env['NODE_ENV'] === 'development') {
       Object.keys(require.cache).forEach(key => {
@@ -61,6 +71,10 @@ class Pages {
     this.debug(`Available pages: ${PAGE_NAMES.join(', ')}`)
   }
 
+  /**
+   * Sets up a file watcher to enable hot reloading of page modules during development.
+   * Watches the Pages directory for changes and reloads the pages when a change is detected.
+   */
   private setupHotReload(): void {
     if (process.env['NODE_ENV'] === 'development') {
       const pagesDir = path.join(__dirname, `${this.filePath}/Pages`)
@@ -81,6 +95,12 @@ class Pages {
     }
   }
 
+  /**
+   * Retrieves a page module by its name.
+   * If the page is not found, it returns the Error page module.
+   * @param pageName The name of the page to retrieve.
+   * @returns The requested page module.
+   */
   public getPage(pageName: PageName): PageModule {
     if (!this.pageModules[pageName]) {
       Log.warn(`Requested page ${pageName} not found, returning Error page`)
@@ -89,14 +109,25 @@ class Pages {
     return this.pageModules[pageName]
   }
 
+  /**
+   * Returns a list of available page names.
+   * @returns An array of page names.
+   */
   public getAvailablePages(): readonly PageName[] {
     return PAGE_NAMES
   }
 
+  /**
+   * Reloads all page modules, useful for development to apply changes without restarting the server.
+   */
   public reloadPages(): void {
     this.loadPages()
   }
 
+  /**
+   * Shuts down the page watcher if it exists.
+   * This is useful to clean up resources when the server is shutting down.
+   */
   public shutdown(): void {
     if (this.watcher) {
       this.watcher.close()
@@ -105,6 +136,10 @@ class Pages {
     }
   }
 
+  /**
+   * Debugging utility to log messages only in development mode.
+   * @param message The message(s) to log.
+   */
   private debug(...message: any[]): void {
     if (process.env['NODE_ENV'] === 'development') {
       Log.debug(...message)
