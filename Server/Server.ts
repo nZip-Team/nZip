@@ -1,6 +1,6 @@
-import Bun, { type ServerWebSocket } from 'bun'
+import Bun from 'bun'
 import { Hono, type Context } from 'hono'
-import { createBunWebSocket } from 'hono/bun'
+import { upgradeWebSocket, websocket } from 'hono/bun'
 import { getConnInfo } from 'hono/bun'
 
 import { existsSync } from 'fs'
@@ -41,7 +41,6 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   analytics = analytic ? (JSON.parse(analytic) as ElementAttributes) : null
 
   const app = new Hono()
-  const { upgradeWebSocket, websocket } = createBunWebSocket<ServerWebSocket>()
 
   app.use(async (c, next) => {
     c.header('X-Powered-By', `nZip ${version}`)
