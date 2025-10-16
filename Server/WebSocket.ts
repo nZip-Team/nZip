@@ -9,18 +9,52 @@ import Log from '@icebrick/log'
 
 import { getIP } from './Server'
 
-import type { Context } from "hono"
-import type { BlankEnv, BlankInput } from "hono/types"
+import type { Context } from 'hono'
+import type { BlankEnv, BlankInput } from 'hono/types'
 import type { WSContext, WSEvents } from 'hono/ws'
 import type { ServerWebSocket } from 'bun'
 
 export default class WebSocketHandler {
   private nh: nhget
   private imageHost: string
+  private activeDownloads: Map<string, FileDownloader>
 
   constructor(nh: nhget, imageHost: string) {
     this.nh = nh
     this.imageHost = imageHost
+    this.activeDownloads = new Map()
+  }
+
+  /**
+   * Safely remove a directory if it exists
+   * @param dirPath Path to the directory to remove
+   */
+  private rmDir(dirPath: string): void {
+    try {
+      if (fs.existsSync(dirPath)) {
+        let attempts = 0
+        const maxAttempts = 3
+
+        const tryRemove = () => {
+          try {
+            fs.rmSync(dirPath, { recursive: true, force: true })
+            return true
+          } catch (error) {
+            attempts++
+            if (attempts < maxAttempts) {
+              setTimeout(tryRemove, 500)
+            } else {
+              Log.error(`Failed to remove directory ${dirPath} after ${maxAttempts} attempts: ${error}`)
+            }
+            return false
+          }
+        }
+
+        tryRemove()
+      }
+    } catch (error) {
+      Log.error(`Failed to check/remove directory ${dirPath}: ${error}`)
+    }
   }
 
   /**
@@ -28,10 +62,11 @@ export default class WebSocketHandler {
    * @param c Context containing request and response information
    * @returns WebSocket events
    */
-  public handle(c: Context<BlankEnv, "/ws/g/:id", BlankInput>): WSEvents<ServerWebSocket> {
+  public handle(c: Context<BlankEnv, '/ws/g/:id', BlankInput>): WSEvents<ServerWebSocket> {
     const timestamp = Date.now()
     let downloadCompleted = false
     let downloader: FileDownloader | null = null
+    const isClosedRef = { value: false }
 
     const id = c.req.param('id')
     const hash = crypto.createHash('md5').update(id).update(timestamp.toString()).digest('hex')
@@ -72,8 +107,18 @@ export default class WebSocketHandler {
           let retry = 0
           let success = false
 
-          while (success === false && retry < 3) {
-            success = await this.download(images, hash, ws, filename, (fd) => { downloader = fd })
+          while (success === false && retry < 3 && !isClosedRef.value) {
+            success = await this.download(
+              images,
+              hash,
+              ws,
+              filename,
+              (fd) => {
+                downloader = fd
+                this.activeDownloads.set(hash, fd)
+              },
+              isClosedRef
+            )
             if (success === false) {
               retry++
             } else {
@@ -81,47 +126,56 @@ export default class WebSocketHandler {
             }
           }
 
+          if (isClosedRef.value) {
+            return
+          }
+
           if (success === true) {
             downloadCompleted = true
+            this.activeDownloads.delete(hash)
             Log.info(`WS Download End: ${response.id} - ${ip}`)
 
             ws.send(Buffer.concat([Buffer.from([0x20]), Buffer.from(`/download/${hash}/${filename}`)]))
             ws.close()
 
-            fs.readdirSync(path.join(__dirname, 'Cache', 'Downloads', hash)).forEach(file => {
+            fs.readdirSync(path.join(__dirname, 'Cache', 'Downloads', hash)).forEach((file) => {
               if (file !== filename) {
                 fs.unlinkSync(path.join(__dirname, 'Cache', 'Downloads', hash, file))
               }
             })
 
-            setTimeout(() => fs.rmSync(path.join(__dirname, 'Cache', 'Downloads', hash), { recursive: true }), 3e5)
+            setTimeout(() => this.rmDir(path.join(__dirname, 'Cache', 'Downloads', hash)), 3e5)
           } else {
             Log.error(`Failed to download gallery: ${response.id}`)
+            this.activeDownloads.delete(hash)
             ws.send(Buffer.from([0x20]))
             ws.close(1011, 'Internal Server Error')
 
-            fs.rmSync(path.join(__dirname, 'Cache', 'Downloads', hash), { recursive: true })
+            this.rmDir(path.join(__dirname, 'Cache', 'Downloads', hash))
           }
         } catch (error) {
           Log.error(`Error in WebSocket handler: ${error}`)
+          this.activeDownloads.delete(hash)
           ws.close(1011, 'Internal Server Error')
         }
       },
-      
-      onClose: () => {
-        if (downloader && !downloadCompleted) {
-          downloader.stop()
-        }
 
-        if (!downloadCompleted && hash) {
-          const downloadPath = path.join(__dirname, 'Cache', 'Downloads', hash)
-          if (fs.existsSync(downloadPath)) {
+      onClose: async () => {
+        isClosedRef.value = true
+
+        if (downloader && !downloadCompleted) {
+          Log.info(`Stopping download: ${ip} - ${id}`)
+          await downloader.stop()
+          this.activeDownloads.delete(hash)
+
+          await new Promise((resolve) => setTimeout(resolve, 3000))
+
+          if (!downloadCompleted) {
             Log.info(`Cleaning up unfinished download: ${ip} - ${id}`)
-            try {
-              fs.rmSync(downloadPath, { recursive: true })
-            } catch (error) {
-              Log.error(`Failed to clean up unfinished download: ${downloadPath}`)
-            }
+            const downloadPath = path.join(__dirname, 'Cache', 'Downloads', hash)
+
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+            this.rmDir(downloadPath)
           }
         }
       }
@@ -135,8 +189,9 @@ export default class WebSocketHandler {
    * @param ws WebSocket connection
    * @param filename Filename of the zip file
    * @param setDownloader Callback to set the downloader instance
+   * @param isClosedRef Reference to isClosed flag that tracks WebSocket state
    */
-  private async download(images: string[], hash: string, ws: WSContext<ServerWebSocket>, filename: string, setDownloader: (downloader: FileDownloader) => void): Promise<boolean> {
+  private async download(images: string[], hash: string, ws: WSContext<ServerWebSocket>, filename: string, setDownloader: (downloader: FileDownloader) => void, isClosedRef: { value: boolean }): Promise<boolean> {
     return new Promise(async (resolve, _) => {
       const urlCount = images.length
       const concurrentDownloads = Math.min(urlCount, 16)
@@ -148,11 +203,14 @@ export default class WebSocketHandler {
         timeout: 5000,
         debug: process.env['NODE_ENV'] === 'development'
       })
-      
+
       setDownloader(downloader)
 
+      let isStopped = false
+
       downloader.on('progress', (completed, total) => {
-        if (ws.readyState === 1) { // OPEN
+        if (ws.readyState === 1) {
+          // OPEN
           const buffer = Buffer.alloc(1 + 2 + 2)
 
           buffer[0] = 0x00
@@ -160,21 +218,39 @@ export default class WebSocketHandler {
           buffer.writeUint16BE(total, 3)
 
           ws.send(buffer)
+        } else {
+          if (!isStopped) {
+            isStopped = true
+            downloader.stop()
+          }
         }
       })
 
       try {
         await downloader.download([{ urls: images }])
       } catch (error) {
-        ws.send(Buffer.from([0x01]))
-        ws.close()
+        if (ws.readyState === 1) {
+          ws.send(Buffer.from([0x01]))
+          ws.close()
+        }
 
-        fs.rmSync(path.join(__dirname, 'Cache', 'Downloads', hash), { recursive: true })
+        this.rmDir(path.join(__dirname, 'Cache', 'Downloads', hash))
         resolve(false)
         return
       }
 
-      if (ws.readyState === 1) { // OPEN
+      if (isStopped || ws.readyState !== 1) {
+        resolve(false)
+        return
+      }
+
+      if (isClosedRef.value) {
+        resolve(false)
+        return
+      }
+
+      if (ws.readyState === 1) {
+        // OPEN
         try {
           const buffer = Buffer.alloc(1 + 2 + 2)
 
@@ -185,25 +261,76 @@ export default class WebSocketHandler {
           ws.send(buffer)
 
           const zipFilePath = path.join(__dirname, 'Cache', 'Downloads', hash, filename)
+          const downloadDir = path.join(__dirname, 'Cache', 'Downloads', hash)
+
+          if (!fs.existsSync(downloadDir)) {
+            ws.send(Buffer.from([0x11]))
+            ws.close()
+            resolve(false)
+            return
+          }
+
+          const existingFiles: string[] = []
+          for (const url of images) {
+            const filePath = path.join(__dirname, 'Cache', 'Downloads', hash, path.basename(url))
+            if (fs.existsSync(filePath)) {
+              existingFiles.push(filePath)
+            }
+          }
+
+          if (existingFiles.length === 0) {
+            ws.send(Buffer.from([0x11]))
+            ws.close()
+            this.rmDir(path.join(__dirname, 'Cache', 'Downloads', hash))
+            resolve(false)
+            return
+          }
 
           const zipfile = new ZipFile()
           const output = fs.createWriteStream(zipFilePath)
+
+          output.on('error', (err) => {
+            Log.error(`Error writing zip file: ${err}`)
+            if (ws.readyState === 1) {
+              ws.send(Buffer.from([0x11]))
+              ws.close()
+            }
+            this.rmDir(path.join(__dirname, 'Cache', 'Downloads', hash))
+            resolve(false)
+          })
 
           zipfile.outputStream.pipe(output).on('close', () => {
             resolve(true)
           })
 
-          for (const url of images) {
-            const filePath = path.join(__dirname, 'Cache', 'Downloads', hash, path.basename(url))
-            zipfile.addFile(filePath, path.basename(url))
+          for (const filePath of existingFiles) {
+            if (isClosedRef.value) {
+              Log.info('Connection closed during zip creation, aborting')
+              zipfile.end()
+              resolve(false)
+              return
+            }
+
+            if (fs.existsSync(filePath)) {
+              try {
+                zipfile.addFile(filePath, path.basename(filePath))
+              } catch (err) {
+                Log.error(`Error adding file to zip: ${err}`)
+              }
+            } else {
+              Log.warn(`File no longer exists, skipping: ${filePath}`)
+            }
           }
 
           zipfile.end()
-        } catch (_) {
-          ws.send(Buffer.from([0x11]))
-          ws.close()
+        } catch (err) {
+          Log.error(`Error creating zip: ${err}`)
+          if (ws.readyState === 1) {
+            ws.send(Buffer.from([0x11]))
+            ws.close()
+          }
 
-          fs.rmSync(path.join(__dirname, 'Cache', 'Downloads', hash), { recursive: true })
+          this.rmDir(path.join(__dirname, 'Cache', 'Downloads', hash))
           resolve(false)
         }
       }

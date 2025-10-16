@@ -23,6 +23,7 @@ Install Docker (if you haven't already) with the following curl or wget:
 ```bash
 curl -o- https://get.docker.com | bash
 ```
+
 ```bash
 wget -qO- https://get.docker.com | bash
 ```
@@ -66,7 +67,7 @@ API_URL=
 IMAGE_URL=
 
 # Optional
-ANALYTICS= 
+ANALYTICS=
 
 # Set to production if you want to run the server in production mode
 NODE_ENV=development

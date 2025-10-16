@@ -1,32 +1,35 @@
-import { Scope } from '@lightbery/scope'
+/**
+ * Update the minimum height of an element based on its children's heights
+ */
+function updateDynamicMinHeight(): void {
+  const body = document.body
+  const extraHeight = body.getAttribute('data-dynamic-minheight') || '0px'
 
-import type { ScriptScope } from '../Types'
+  let totalHeight = 0
 
-const scope: ScriptScope = new Scope(undefined)
-
-scope.AttributeManager.createAttribute('style:dynamic:minheight', {
-  script: (scope, element, value) => {
-    // Update The Height
-    function update(): void {
-      let totalHeight: number = 0
-
-      for (const child of Array.from(element.children)) {
-        const bound = child.element!.getBoundingClientRect()
-
-        totalHeight += bound.height
-      }
-
-      element.style.minHeight = scope.Style.parseValue(value.replace('<height>', `${totalHeight}px`))
-    }
-
-    update()
-
-    element.ListenerManager.createListener(window, 'load', update)
-    element.ListenerManager.createListener(window, 'resize', update)
+  for (const child of Array.from(body.children) as HTMLElement[]) {
+    const bound = child.getBoundingClientRect()
+    totalHeight += bound.height
   }
-})
 
-scope.mountElement(document.body)
+  const extraHeightValue = parseFloat(extraHeight)
+  const extraHeightUnit = extraHeight.replace(/[\d.]/g, '')
+
+  let extraHeightPx = 0
+  if (extraHeightUnit === 'rem') {
+    const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize)
+    extraHeightPx = extraHeightValue * rootFontSize
+  } else if (extraHeightUnit === 'px') {
+    extraHeightPx = extraHeightValue
+  }
+
+  body.style.minHeight = `${totalHeight + extraHeightPx}px`
+}
+
+// Initialize dynamic min-height
+updateDynamicMinHeight()
+window.addEventListener('load', updateDynamicMinHeight)
+window.addEventListener('resize', updateDynamicMinHeight)
 
 type States = 'loading' | 'success'
 
@@ -67,7 +70,7 @@ socket.addEventListener('open', () => {
   let step_download: boolean = false
   let step_pack: boolean = false
 
-  socket.addEventListener('message', async event => {
+  socket.addEventListener('message', async (event) => {
     const raw = await event.data.arrayBuffer()
     const buffer = new Uint8Array(raw)
     const view = new DataView(raw)

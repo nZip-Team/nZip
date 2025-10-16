@@ -1,13 +1,22 @@
 import path from 'path'
 import { existsSync, watch, type FSWatcher } from 'fs'
+import type { JSX } from 'hono/jsx/jsx-runtime'
 
 import Log from '@icebrick/log'
 
-import type { Page as PageModule } from './Types'
+import Frame from './Frame'
 
 const PAGE_NAMES = ['Home', 'Download', 'Error', 'Terms', 'Privacy'] as const
 
-type PageName = typeof PAGE_NAMES[number]
+type PageName = (typeof PAGE_NAMES)[number]
+
+type PageModule = (args?: any) => {
+  title: string
+  description: string
+  keywords?: string
+  content: JSX.Element
+  render: (args: { analytics?: string | null }) => string
+}
 
 /**
  * Pages class to manage and load page modules dynamically.
@@ -25,13 +34,16 @@ class Pages {
     this.pageModules = {} as Record<PageName, PageModule>
     this.cachedPages = {} as Record<PageName, PageModule | null>
 
-    PAGE_NAMES.forEach(name => {
+    PAGE_NAMES.forEach((name) => {
       this.pageModules[name] = null as unknown as PageModule
       this.cachedPages[name] = null
     })
 
     this.filePath = './App'
     if (!existsSync(path.join(__dirname, this.filePath))) this.filePath = '../App'
+
+    this.getPage = this.getPage.bind(this)
+    this.page = this.page.bind(this)
 
     this.loadPages()
     this.setupHotReload()
@@ -43,7 +55,7 @@ class Pages {
    */
   private loadPages(): void {
     if (process.env['NODE_ENV'] === 'development') {
-      Object.keys(require.cache).forEach(key => {
+      Object.keys(require.cache).forEach((key) => {
         if (key.includes('Pages')) {
           delete require.cache[key]
         }
@@ -97,16 +109,33 @@ class Pages {
 
   /**
    * Retrieves a page module by its name.
-   * If the page is not found, it returns the Error page module.
    * @param pageName The name of the page to retrieve.
    * @returns The requested page module.
    */
   public getPage(pageName: PageName): PageModule {
-    if (!this.pageModules[pageName]) {
-      Log.warn(`Requested page ${pageName} not found, returning Error page`)
-      return this.pageModules.Error || ({} as PageModule)
+    return this.addRenderer(this.pageModules[pageName])
+  }
+
+  /**
+   * Renders a page by its name with optional arguments.
+   * @param pageName The name of the page to render.
+   * @param args Optional arguments to pass to the page module.
+   * @returns The page object with title, description, keywords, content, and render method.
+   */
+  public page(pageName: PageName, args?: any): ReturnType<PageModule> {
+    return this.addRenderer(this.pageModules[pageName])(args)
+  }
+
+  private addRenderer(pageModule: PageModule): PageModule {
+    return (args?: any) => {
+      const page = pageModule(args)
+      return {
+        ...page,
+        render: (renderArgs: { analytics?: string | null }) => {
+          return Frame(page, renderArgs)
+        }
+      }
     }
-    return this.pageModules[pageName]
   }
 
   /**
@@ -148,4 +177,4 @@ class Pages {
 }
 
 export default new Pages()
-export type { PageName }
+export type { PageName, PageModule }

@@ -5,6 +5,9 @@
     "module": "ESNext",
     "moduleDetection": "force",
 
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
+
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,

@@ -8,10 +8,14 @@ import { version } from './package.json'
 
 const httpHost = process.env['HOST'] || 'http://localhost'
 const httpPort = parseInt(process.env['PORT'] || '3000')
-const apiHost = process.env['API_URL'] ?? (() => {
+const apiHost =
+  process.env['API_URL'] ??
+  (() => {
     throw new Error('API_URL is not defined')
   })()
-const imageHost = process.env['IMAGE_URL'] ?? (() => {
+const imageHost =
+  process.env['IMAGE_URL'] ??
+  (() => {
     throw new Error('IMAGE_URL is not defined')
   })()
 const analytics = process.env['ANALYTICS'] || ''

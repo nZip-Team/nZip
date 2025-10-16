@@ -6,16 +6,13 @@ import { getConnInfo } from 'hono/bun'
 import { existsSync } from 'fs'
 import path from 'path'
 
-import { Scope, type ElementAttributes } from '@lightbery/scope'
 import nhget, { type GalleryData } from '@icebrick/nhget'
 import Log from '@icebrick/log'
 
 import Pages, { type PageName } from './Pages'
 import WebSocketHandler from './WebSocket'
-import type { RenderScope } from './Types'
 
-let analytics: ElementAttributes | null = null
-const scope: RenderScope = new Scope(undefined)
+let analytics: string | null = null
 
 let filePath = './App'
 if (!existsSync(path.join(__dirname, filePath))) filePath = '../App'
@@ -38,7 +35,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     imageEndpoint: `${imageHost}/galleries/`
   })
 
-  analytics = analytic ? (JSON.parse(analytic) as ElementAttributes) : null
+  analytics = analytic || null
 
   const app = new Hono()
 
@@ -49,24 +46,24 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   })
 
   app.on('GET', ['/', '/home'], (c) => {
-    return c.html(renderPage('Home', { version }))
+    return Page(c, 'Home', { version })
   })
 
   app.get('/terms', (c) => {
-    return c.html(renderPage('Terms'))
+    return Page(c, 'Terms')
   })
 
   app.get('/privacy', (c) => {
-    return c.html(renderPage('Privacy'))
+    return Page(c, 'Privacy')
   })
 
   app.get('/g/:id', async (c) => {
     let id = c.req.param('id')
     if (!id || !Number(id)) {
       c.status(400)
-      return c.html(renderPage('Error', {
+      return Page(c, 'Error', {
         error: "That's not a Number 😭"
-      }))
+      })
     }
 
     try {
@@ -74,28 +71,28 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
 
       if (response.error) {
         c.status(404)
-        return c.html(renderPage('Error', {
+        return Page(c, 'Error', {
           error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?'
-        }))
+        })
       } else {
         const type = response.images.pages[0].t
         const extension = type === 'j' ? 'jpg' : type === 'g' ? 'gif' : type === 'w' ? 'webp' : 'png'
         const title = response.title.english || response.title.japanese || response.title.pretty || null
         const cover = `${imageHost}/galleries/${response.media_id}/1.${extension}`
-        return c.html(renderPage('Download', { id, title, cover }))
+        return Page(c, 'Download', { id, title, cover })
       }
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('Not Found') || error.message.includes('does not exist')) {
           c.status(404)
-          return c.html(renderPage('Error', {
+          return Page(c, 'Error', {
             error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?'
-          }))
+          })
         } else {
           c.status(500)
-          return c.html(renderPage('Error', {
+          return Page(c, 'Error', {
             error: 'Something went wrong while fetching the doujinshi, please try again later or go back to <a href="/">home</a>.'
-          }))
+          })
         }
       }
     }
@@ -106,9 +103,12 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     return c.redirect(`/g/${id}`)
   })
 
-  app.get('/ws/g/:id', upgradeWebSocket((c) => {
-    return new WebSocketHandler(nh, imageHost).handle(c)
-  }))
+  app.get(
+    '/ws/g/:id',
+    upgradeWebSocket((c) => {
+      return new WebSocketHandler(nh, imageHost).handle(c)
+    })
+  )
 
   app.get('/download/:hash/:file', async (c) => {
     try {
@@ -121,17 +121,17 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       if (!filePath || !fileLoc) throw true
 
       if (!fileName.endsWith('.zip')) throw new Error('Invalid File')
-      if (!await Bun.file(fileLoc).exists()) throw new Error('File does not exist')
+      if (!(await Bun.file(fileLoc).exists())) throw new Error('File does not exist')
 
-      const [ start, end ] = parseRangeHeader(c.req.header('Range'))
+      const [start, end] = parseRangeHeader(c.req.header('Range'))
 
       const file = Bun.file(fileLoc)
       return new Response(file.slice(start, end))
     } catch {
       c.status(404)
-      return c.html(renderPage('Error', {
+      return Page(c, 'Error', {
         error: 'That file does not exist. You can go back <a href="/">home</a> and get a new link.'
-      }))
+      })
     }
   })
 
@@ -142,7 +142,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
 
       if (!scriptPath) throw true
 
-      if (!await Bun.file(scriptPath).exists()) throw new Error('Script does not exist')
+      if (!(await Bun.file(scriptPath).exists())) throw new Error('Script does not exist')
       return new Response(Bun.file(scriptPath), {
         headers: {
           'Content-Type': 'text/javascript'
@@ -150,9 +150,9 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       })
     } catch {
       c.status(404)
-      return c.html(renderPage('Error', { 
-        error: "console.error('Script Not Found')" 
-      }))
+      return Page(c, 'Error', {
+        error: "console.error('Script Not Found')"
+      })
     }
   })
 
@@ -163,7 +163,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
 
       if (!stylePath) throw true
 
-      if (!await Bun.file(stylePath).exists()) throw new Error('Style does not exist')
+      if (!(await Bun.file(stylePath).exists())) throw new Error('Style does not exist')
       return new Response(Bun.file(stylePath), {
         headers: {
           'Content-Type': 'text/css'
@@ -171,9 +171,9 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       })
     } catch {
       c.status(404)
-      return c.html(renderPage('Error', { 
-        error: 'What style? Do you mean <a href="/g/228922">this</a>?' 
-      }))
+      return Page(c, 'Error', {
+        error: 'What style? Do you mean <a href="/g/228922">this</a>?'
+      })
     }
   })
 
@@ -186,7 +186,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
         throw new Error()
       }
 
-      if (!await Bun.file(imagePath).exists()) throw new Error('Image does not exist')
+      if (!(await Bun.file(imagePath).exists())) throw new Error('Image does not exist')
       const bunFile = Bun.file(imagePath)
       return new Response(bunFile, {
         headers: {
@@ -195,17 +195,17 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       })
     } catch {
       c.status(404)
-      return c.html(renderPage('Error', { 
-        error: "The image you're trying to find does not exist. You probably have some mental disorders, please contact your doctor for professional help." 
-      }))
+      return Page(c, 'Error', {
+        error: "The image you're trying to find does not exist. You probably have some mental disorders, please contact your doctor for professional help."
+      })
     }
   })
 
   app.get('/error', (c) => {
     c.status(404)
-    return c.html(renderPage('Error', { 
-      error: 'Don\'t tell anyone but I got some <a href="/g/228922">good stuff</a> for you :)' 
-    }))
+    return Page(c, 'Error', {
+      error: 'Don\'t tell anyone but I got some <a href="/g/228922">good stuff</a> for you :)'
+    })
   })
 
   app.get('/favicon.ico', async (c) => {
@@ -215,7 +215,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   app.get('/robots.txt', async (c) => {
     const robotsPath = path.join(__dirname, `${filePath}/robots.txt`)
     try {
-      if (!await Bun.file(robotsPath).exists()) throw new Error('robots.txt does not exist')
+      if (!(await Bun.file(robotsPath).exists())) throw new Error('robots.txt does not exist')
       return new Response(Bun.file(robotsPath), {
         headers: {
           'Content-Type': 'text/plain'
@@ -226,18 +226,6 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
         'Content-Type': 'text/plain'
       })
     }
-  })
-
-  app.get('/:epic{^wp.+}', (_c) => {
-    return textResponse('Consider fucking off, this isn\'t WordPress. Who the hell uses WordPress in this year?')
-  })
-
-  app.get('/:epic{.+\.php}', (_c) => {
-    return textResponse('PHP? What is this, 2005? Please use modern technologies such as Node.js or Bun instead :)')
-  })
-
-  app.get('/.env', (_c) => {
-    return textResponse('XAI_API_KEY=xyzFUCKOFF7890abcdef123456\nOPENAI_API_KEY=sk-YOUSUCK1234567890nonsense\nGITHUB_API_TOKEN=ghp_GETREKT0987654321haha\nAWS_ACCESS_KEY=AKIAYOULOSER1234567890\nAWS_SECRET_KEY=3210YOUREDONE987654321xyz\nNODE_ENV=production', 50)
   })
 
   app.notFound(async (c) => {
@@ -276,18 +264,18 @@ export function getIP(c: Context): string {
  */
 function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
   if (!rangeHeader) return [0, Infinity]
-  
+
   try {
     const rangeValue = rangeHeader.split('=')[1]
     if (!rangeValue) return [0, Infinity]
-    
+
     const [startStr, endStr] = rangeValue.split('-')
     const startNum = startStr ? parseInt(startStr) : 0
     const endNum = endStr ? parseInt(endStr) : Infinity
-    
+
     if (isNaN(startNum)) return [0, endNum]
     if (isNaN(endNum)) return [startNum, Infinity]
-    
+
     return [startNum, endNum]
   } catch (error) {
     return [0, Infinity]
@@ -302,64 +290,15 @@ function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
  */
 function sanitizePath(userInput: string, baseDir: string): string | null {
   const sanitized = userInput.replace(/\.\./g, '').replace(/\\/g, '/')
-  
+
   const fullPath = path.resolve(path.join(__dirname, baseDir, sanitized))
   const basePath = path.resolve(path.join(__dirname, baseDir))
-  
+
   if (!fullPath.startsWith(basePath)) {
     return null
   }
-  
+
   return fullPath
-}
-
-/**
- * Convert a text to a ReadableStream
- * @param text The text to convert
- * @returns A ReadableStream containing the text
- */
-function textResponse(text: string, delay: number = 100): Response {
-  try {
-    const stream = new ReadableStream({
-      start(controller) {
-        let index = 0
-        let isClosed = false
-        
-        const interval = setInterval(() => {
-          if (isClosed) {
-            clearInterval(interval)
-            return
-          }
-          
-          if (index < text.length) {
-            try {
-              controller.enqueue(new TextEncoder().encode(text[index]))
-              index++
-            } catch {
-              isClosed = true
-              clearInterval(interval)
-            }
-          } else {
-            isClosed = true
-            clearInterval(interval)
-            try {
-              controller.close()
-            } catch {}
-          }
-        }, delay)
-      }
-    })
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-        'Cache-Control': 'no-cache'
-      }
-    })
-  } catch {
-    return new Response('Internal Server Error')
-  }
 }
 
 /**
@@ -368,41 +307,11 @@ function textResponse(text: string, delay: number = 100): Response {
  * @param args Optional arguments to pass to the page
  * @returns A string containing the rendered HTML of the page
  */
-async function renderPage(page: PageName, args?: null | Record<string, unknown>): Promise<string> {
+async function Page(c: Context, pagename: PageName, args?: null | Record<string, unknown>): Promise<Response> {
   try {
-    const { Element } = scope
-    const Page = Pages.getPage(page)(scope, args)
-    const doctype = '<!DOCTYPE html>'
-    const head = [
-      new Element('title', { innerHTML: Page.title }),
-      new Element('meta', { name: 'title', content: Page.title }),
-      new Element('meta', { name: 'description', content: Page.description }),
-      new Element('meta', { name: 'og:title', content: Page.title }),
-      new Element('meta', { name: 'og:description', content: Page.description }),
-    ]
-
-    if (Page.keywords) head.push(new Element('meta', { name: 'keywords', content: Page.keywords }))
-
-    head.push(
-      new Element('meta', { name: 'viewport', content: 'width=device-width, initial-scale=1.0' }),
-      new Element('meta', { charset: 'utf-8' })
-    )
-
-    head.push(
-      new Element('link', { rel: 'icon', href: '/Images/icon.ico' }),
-      new Element('link', { rel: 'stylesheet', href: '/Styles/Main.css' })
-    )
-
-    if (analytics) head.push(new Element('script', analytics))
-
-    const html = new Element('html', { lang: 'en' }, [
-      new Element('head', {}, head),
-      Page.content
-    ]).render()
-
-    return doctype + html
+    return c.html(Pages.page(pagename, args).render({ analytics }))
   } catch (error) {
     Log.error(error)
-    return '<!DOCTYPE html><html><body>Page Not Found</body></html>'
+    return c.html('<!DOCTYPE html><html><body>Page Not Found</body></html>')
   }
 }
