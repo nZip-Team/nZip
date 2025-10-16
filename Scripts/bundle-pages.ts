@@ -1,10 +1,10 @@
 import { build } from 'tsdown'
 
 build({
-  entry: './App/Pages/*.ts',
+  entry: './App/Pages/*.tsx',
   outDir: './dist/App/Pages',
 
-  format: 'cjs',
+  format: 'esm',
   target: ['esnext'],
   minify: true,
 

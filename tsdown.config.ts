@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ['./Main.ts'],
   outDir: './dist',
 
-  format: 'cjs',
+  format: 'esm',
   minify: false,
 
   sourcemap: false,
