@@ -26,6 +26,26 @@ export default class WebSocketHandler {
   }
 
   /**
+   * Generate a safe filename that doesn't exceed filesystem limits
+   * @param galleryId Gallery ID
+   * @param titles Object containing title options
+   * @returns Sanitized filename within 255 bytes
+   */
+  private generateFilename(galleryId: string | number, titles: { english?: string; pretty?: string }): string {
+    const sanitize = (text: string) => text.replace(/[/\\?%*:|"<>]/g, '_')
+    const tryFilename = (title: string) => {
+      const filename = `[${galleryId}] ${sanitize(title)}.zip`
+      return Buffer.byteLength(filename) <= 255 ? filename : null
+    }
+
+    return (
+      (titles.english && tryFilename(titles.english)) ||
+      (titles.pretty && tryFilename(titles.pretty)) ||
+      `${galleryId}.zip`
+    )
+  }
+
+  /**
    * Safely remove a directory if it exists
    * @param dirPath Path to the directory to remove
    */
@@ -95,14 +115,7 @@ export default class WebSocketHandler {
             return `${this.imageHost}/galleries/${response.media_id}/${index + 1}.${extension}`
           })
 
-          const galleryId = response.id
-          const title = response.title.english || response.title.japanese || response.title.pretty || null
-          let filename = title ? title.replace(/[/\\?%*:|"<>]/g, '_') : null
-          if (title) {
-            filename = `[${galleryId}] ${filename}.zip`
-          } else {
-            filename = `${galleryId}.zip`
-          }
+          const filename = this.generateFilename(response.id, response.title)
 
           let retry = 0
           let success = false
