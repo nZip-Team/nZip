@@ -115,8 +115,8 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       const hash = c.req.param('hash')
       const fileName = decodeURIComponent(c.req.param('file'))
 
-      const filePath = sanitizePath(hash, 'Cache/Downloads')
-      const fileLoc = sanitizePath(fileName, `Cache/Downloads/${hash}`)
+      const filePath = sanitizePath(hash, downloadPath)
+      const fileLoc = sanitizePath(fileName, path.join(downloadPath, hash))
 
       if (!filePath || !fileLoc) throw true
 
@@ -289,9 +289,9 @@ function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
  * @returns The sanitized path or null if the path is invalid
  */
 function sanitizePath(userInput: string, baseDir: string): string | null {
-  const sanitized = userInput.replace(/\.\./g, '').replace(/\\/g, '/')
+  const normalized = userInput.replace(/\\/g, '/')
 
-  const fullPath = path.resolve(path.join(__dirname, baseDir, sanitized))
+  const fullPath = path.resolve(path.join(__dirname, baseDir, normalized))
   const basePath = path.resolve(path.join(__dirname, baseDir))
 
   if (!fullPath.startsWith(basePath)) {
