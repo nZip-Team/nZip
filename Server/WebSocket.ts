@@ -148,7 +148,7 @@ export default class WebSocketHandler {
             this.activeDownloads.delete(hash)
             Log.info(`WS Download End: ${response.id} - ${ip}`)
 
-            ws.send(Buffer.concat([Buffer.from([0x20]), Buffer.from(`/download/${hash}/${filename}`)]))
+            ws.send(Buffer.concat([Buffer.from([0x20]), Buffer.from(`/download/${hash}/${encodeURIComponent(filename)}`)]))
             ws.close()
 
             fs.readdirSync(path.join(__dirname, 'Cache', 'Downloads', hash)).forEach((file) => {

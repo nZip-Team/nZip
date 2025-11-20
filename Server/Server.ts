@@ -113,7 +113,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   app.get('/download/:hash/:file', async (c) => {
     try {
       const hash = c.req.param('hash')
-      const fileName = c.req.param('file')
+      const fileName = decodeURIComponent(c.req.param('file'))
 
       const filePath = sanitizePath(hash, 'Cache/Downloads')
       const fileLoc = sanitizePath(fileName, `Cache/Downloads/${hash}`)
