@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.10.3",
+  "version": "1.11.0",
   "type": "module",
   "scripts": {
     "start": "bun Main.ts",
@@ -16,14 +16,14 @@
     "@icebrick/file-downloader": "^1.2.0",
     "@icebrick/log": "^1.1.5",
     "@icebrick/nhget": "^1.0.5",
-    "bun": "^1.3.0",
-    "hono": "^4.9.12",
-    "prettier": "^3.6.2",
+    "bun": "^1.3.5",
+    "hono": "^4.11.1",
+    "prettier": "^3.7.4",
     "tsdown": "^0.12.9",
     "yazl": "^3.3.1"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.0",
+    "@types/bun": "^1.3.4",
     "@types/yazl": "^3.3.0"
   }
 }

@@ -9,6 +9,7 @@ services:
       - PORT=${PORT}
       - API_URL=${API_URL}
       - IMAGE_URL=${IMAGE_URL}
+      - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
       - ANALYTICS=${ANALYTICS}
       - NODE_ENV=${NODE_ENV}
     network_mode: bridge

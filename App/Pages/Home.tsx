@@ -30,14 +30,10 @@ export default (args: { version: string }) => {
           </div>
         </div>
         <div style={{ position: 'fixed', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '1rem', bottom: '0.6rem', width: 'calc(100dvw - 2rem)' }}>
-          <div style={{ flex: '1', display: 'flex', flexShrink: '0', alignItems: 'center', gap: '0.5rem' }}>
-            <h1 className="text" style={{ fontSize: '1rem', textWrap: 'nowrap' }}>Made by</h1>
-            <a className="text" href="https://github.com/noticebrick" target="_blank" style={{ fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>IceBrick</a>
-            <h1 className="text" style={{ fontSize: '1rem', textWrap: 'nowrap' }}>and</h1>
-            <a className="text" href="https://github.com/LmanTW" target="_blank" style={{ fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>LmanTW</a>
-            <h1 className="text" style={{ fontSize: '1rem', textWrap: 'nowrap' }}>with ❤️</h1>
+          <div style={{ flex: '1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h1 className="text" style={{ fontSize: '1rem' }}>nZip {args.version}</h1>
           </div>
-          <a href="https://github.com/nZip-Team/nZip" target="_blank" style={{ flexShrink: '0', fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>nZip {args.version}</a>
+          <a className="text" href="https://github.com/nZip-Team/nZip" target="_blank" style={{ flexShrink: '0', fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>GitHub</a>
         </div>
         <script src="/Scripts/Home.js"></script>
       </body>

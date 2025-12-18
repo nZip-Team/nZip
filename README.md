@@ -49,6 +49,7 @@ services:
       - PORT=${PORT}
       - API_URL=${API_URL}
       - IMAGE_URL=${IMAGE_URL}
+      - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
       - ANALYTICS=${ANALYTICS}
       - NODE_ENV=${NODE_ENV}
     network_mode: bridge
@@ -65,6 +66,9 @@ PORT=3000
 # Both API_URL and IMAGE_URL must be set to start the server
 API_URL=
 IMAGE_URL=
+
+# Number of concurrent image downloads for each download session (default: 16)
+CONCURRENT_IMAGE_DOWNLOADS=16
 
 # Optional
 ANALYTICS=

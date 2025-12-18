@@ -18,6 +18,7 @@ const imageHost =
   (() => {
     throw new Error('IMAGE_URL is not defined')
   })()
+const concurrentImageDownloads = parseInt(process.env['CONCURRENT_IMAGE_DOWNLOADS'] || '16')
 const analytics = process.env['ANALYTICS'] || ''
 const development = process.env.NODE_ENV === 'development'
 
@@ -27,7 +28,7 @@ if (fs.existsSync(path.join(__dirname, 'Cache', 'Downloads'))) fs.rmSync(path.jo
 async function start(): Promise<void> {
   await bundle()
 
-  Server(httpHost, httpPort, apiHost, imageHost, analytics, version)
+  Server(httpHost, httpPort, apiHost, imageHost, concurrentImageDownloads, analytics, version)
 
   if (development) {
     if (!fs.existsSync(path.join(__dirname, 'Server', 'Scripts'))) return

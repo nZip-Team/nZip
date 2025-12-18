@@ -26,14 +26,17 @@ if (!existsSync(path.join(__dirname, downloadPath))) downloadPath = './Cache/Dow
  * @param port Port
  * @param apiHost API host
  * @param imageHost Image host
+ * @param concurrentImageDownloads Number of concurrent image downloads
  * @param analytic Analytics data
  * @param version nZip version
  */
-export default (host: string, port: number, apiHost: string, imageHost: string, analytic: string, version: string) => {
+export default (host: string, port: number, apiHost: string, imageHost: string, concurrentImageDownloads: number, analytic: string, version: string) => {
   const nh = new nhget({
     endpoint: `${apiHost}/api/gallery/`,
     imageEndpoint: `${imageHost}/galleries/`
   })
+
+  const WSHandler = new WebSocketHandler(nh, imageHost, concurrentImageDownloads)
 
   analytics = analytic || null
 
@@ -103,12 +106,9 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     return c.redirect(`/g/${id}`)
   })
 
-  app.get(
-    '/ws/g/:id',
-    upgradeWebSocket((c) => {
-      return new WebSocketHandler(nh, imageHost).handle(c)
-    })
-  )
+  app.get('/ws/g/:id', upgradeWebSocket((c) => {
+    return WSHandler.handle(c)
+  }))
 
   app.get('/download/:hash/:file', async (c) => {
     try {
