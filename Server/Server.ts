@@ -101,7 +101,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     }
   })
 
-  app.on('GET', ['/g/:id/', '/g/:id/*any'], (c) => {
+  app.on('GET', ['/g/:id/', '/g/:id/:any{.+}'], (c) => {
     const id = c.req.param('id')
     return c.redirect(`/g/${id}`)
   })
