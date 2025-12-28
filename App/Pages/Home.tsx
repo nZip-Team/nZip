@@ -9,7 +9,7 @@ export default (args: { version: string }) => {
   return {
     title: 'nZip | Home',
     description: 'Easily download the doujinshi you like.',
-    keywords: 'nhentai, hentai, doujinshi, manga, download, zip, archive, batch download, gallery, adult manga, h-manga, nhentai downloader, doujin, comic, japanese manga',
+    keywords: 'nhentai downloader, nhentai download, nhentai zip, download nhentai, n hentai downloader, nhentai downloader online, download from nhentai, nhentai.net downloader, nzip nhentai, hentai zip, nhentai manga downloader, doujinshi, manga, batch download, gallery, adult manga, h-manga, doujin, comic, japanese manga',
     content: (
       <body style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--background_color)', margin: '0px', width: '100dvw', height: '100dvh' }}>
         <div style={{ position: 'fixed', display: 'flex', alignItems: 'center', justifyContent: 'center', left: '0px', top: '0px', width: '100dvw', height: '100dvh', zIndex: '-1' }}>
