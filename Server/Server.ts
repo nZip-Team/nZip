@@ -3,7 +3,6 @@ import { Hono, type Context } from 'hono'
 import { upgradeWebSocket, websocket } from 'hono/bun'
 import { getConnInfo } from 'hono/bun'
 
-import { existsSync } from 'fs'
 import path from 'path'
 
 import nhget, { type GalleryData } from '@icebrick/nhget'
@@ -11,14 +10,11 @@ import Log from '@icebrick/log'
 
 import Pages, { type PageName } from './Pages'
 import WebSocketHandler from './WebSocket'
+import Languages from './Language'
 
 let analytics: string | null = null
 
 let filePath = './App'
-if (!existsSync(path.join(__dirname, filePath))) filePath = '../App'
-
-let downloadPath = './Server/Cache/Downloads'
-if (!existsSync(path.join(__dirname, downloadPath))) downloadPath = './Cache/Downloads'
 
 /**
  * Start the server
@@ -26,17 +22,18 @@ if (!existsSync(path.join(__dirname, downloadPath))) downloadPath = './Cache/Dow
  * @param port Port
  * @param apiHost API host
  * @param imageHost Image host
+ * @param downloadDir Download directory
  * @param concurrentImageDownloads Number of concurrent image downloads
  * @param analytic Analytics data
  * @param version nZip version
  */
-export default (host: string, port: number, apiHost: string, imageHost: string, concurrentImageDownloads: number, analytic: string, version: string) => {
+export default (host: string, port: number, apiHost: string, imageHost: string, downloadDir: string, concurrentImageDownloads: number, analytic: string, version: string) => {
   const nh = new nhget({
     endpoint: `${apiHost}/api/gallery/`,
     imageEndpoint: `${imageHost}/galleries/`
   })
 
-  const WSHandler = new WebSocketHandler(nh, imageHost, concurrentImageDownloads)
+  const WSHandler = new WebSocketHandler(nh, imageHost, downloadDir, concurrentImageDownloads)
 
   analytics = analytic || null
 
@@ -70,7 +67,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     }
 
     try {
-      const response: GalleryData = (await nh.get(id)) as GalleryData
+      const response: GalleryData = await nh.get(id) as GalleryData
 
       if (response.error) {
         c.status(404)
@@ -115,8 +112,8 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       const hash = c.req.param('hash')
       const fileName = decodeURIComponent(c.req.param('file'))
 
-      const filePath = sanitizePath(hash, downloadPath)
-      const fileLoc = sanitizePath(fileName, path.join(downloadPath, hash))
+      const filePath = sanitizePath(hash, downloadDir)
+      const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
 
       if (!filePath || !fileLoc) throw true
 
@@ -201,6 +198,10 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     }
   })
 
+  app.get('/Languages', (c) => {
+    return c.json(Languages.getAvailableLanguages())
+  })
+
   app.get('/error', (c) => {
     c.status(404)
     return Page(c, 'Error', {
@@ -213,7 +214,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   })
 
   app.get('/robots.txt', async (c) => {
-    const robotsPath = path.join(__dirname, `${filePath}/robots.txt`)
+    const robotsPath = path.join(process.cwd(), `${filePath}/robots.txt`)
     try {
       if (!(await Bun.file(robotsPath).exists())) throw new Error('robots.txt does not exist')
       return new Response(Bun.file(robotsPath), {
@@ -291,8 +292,8 @@ function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
 function sanitizePath(userInput: string, baseDir: string): string | null {
   const normalized = userInput.replace(/\\/g, '/')
 
-  const fullPath = path.resolve(path.join(__dirname, baseDir, normalized))
-  const basePath = path.resolve(path.join(__dirname, baseDir))
+  const basePath = path.isAbsolute(baseDir) ? path.resolve(baseDir) : path.resolve(path.join(process.cwd(), baseDir))
+  const fullPath = path.resolve(path.join(basePath, normalized))
 
   if (!fullPath.startsWith(basePath)) {
     return null
@@ -309,7 +310,13 @@ function sanitizePath(userInput: string, baseDir: string): string | null {
  */
 async function Page(c: Context, pagename: PageName, args?: null | Record<string, unknown>): Promise<Response> {
   try {
-    return c.html(Pages.page(pagename, args).render({ analytics }))
+    const lang = Languages.getLanguageFromCookie(c.req.header('Cookie'))
+    const Args = {
+      ...args,
+      t: (key: string) => Languages.translate(lang, pagename, key)
+    }
+
+    return c.html(Pages.page(pagename, Args).render({ analytics }))
   } catch (error) {
     Log.error(error)
     return c.html('<!DOCTYPE html><html><body>Page Not Found</body></html>')

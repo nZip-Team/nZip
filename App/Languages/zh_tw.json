@@ -1,0 +1,57 @@
+{
+  "language": "繁體中文",
+  "symbol": "🇹🇼",
+
+  "Home": {
+    "Home": "首頁",
+    "Easily download the doujinshi you like.": "輕鬆下載你喜歡的同人誌",
+    "The Sauce": "神的語言",
+    "Terms": "服務條款",
+    "and": "與",
+    "Privacy": "隱私政策",
+    "GitHub": "GitHub"
+  },
+
+  "Download": {
+    "Connecting to the server...": "正在連接伺服器...",
+    "Downloading the images...": "正在下載圖片...",
+    "Packing the images...": "正在打包圖片...",
+    "Finish!": "完成！",
+    "Download": "下載"
+  },
+
+  "Error": {
+    "Error": "錯誤",
+    "Back": "返回"
+  },
+
+  "Terms": {
+    "Terms of Service": "服務條款",
+    "Content Ownership": "內容所有權",
+    "We do not own any of the content available on nhentai.net. All content is owned by the original illustrators and creators. Users are responsible for ensuring that their use of this tool complies with applicable copyright laws.": "我們不擁有 nhentai.net 上的任何內容。所有內容均由原始插畫家和創作者所有。用戶有責任確保使用本工具符合適用的版權法。",
+    "Educational Use Only": "僅供教育用途",
+    "This project is intended for educational purposes only and should not be used for any other purposes.": "本項目僅用於教育目的，不應用於任何其他目的。",
+    "No Affiliation": "無關聯",
+    "This project is not affiliated with or endorsed by nhentai.net.": "本項目與 nhentai.net 無關，也未獲得其認可。",
+    "By using nZip, you acknowledge that you have read and understood this Terms of Service and Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "使用 nZip 即表示您已閱讀並理解本服務條款和隱私政策文件。如果您不同意這些條款，請勿使用本服務。",
+    "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "如果您對這些條款有任何疑問或疑慮，請透過 contact [at] nhentai [dot] zip 與我們聯繫。",
+    "Back": "返回",
+    "Privacy Policy": "隱私政策"
+  },
+
+  "Privacy": {
+    "Privacy Policy": "隱私政策",
+    "Data We Collect": "我們收集的資料",
+    "Geolocation information, Browser type and version, Referrer URL, Device information.": "地理位置資訊、瀏覽器類型和版本、來源網址、設備資訊。",
+    "Data We Do Not Collect": "我們不收集的資料",
+    "We do not collect any information that can directly identify users, such as IP addresses.": "我們不收集任何可以直接識別用戶的資訊，例如 IP 位址。",
+    "Purpose of Data Collection": "資料收集目的",
+    "The data we collect is used solely for improving the service and ensuring its proper functionality.": "我們收集的資料僅用於改善服務和確保其正常運作。",
+    "Data Sharing": "資料共享",
+    "We do not share or sell any collected data to third parties.": "我們不會與第三方共享或出售任何收集的資料。",
+    "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "使用 nZip 即表示您已閱讀並理解服務條款和本隱私政策文件。如果您不同意這些條款，請勿使用本服務。",
+    "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "如果您對這些條款有任何疑問或疑慮，請透過 contact [at] nhentai [dot] zip 與我們聯繫。",
+    "Back": "返回",
+    "Terms of Service": "服務條款"
+  }
+}

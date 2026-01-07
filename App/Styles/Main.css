@@ -29,6 +29,28 @@ a {
   cursor: pointer;
 }
 
+.language-button {
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: transparent;
+  color: var(--text_color);
+  border: 0.1rem solid var(--text_color);
+  border-radius: 0.25rem;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.language-button[data-current="true"] {
+  background: var(--text_color);
+  color: var(--background_color);
+}
+
+.language-button:hover:not([data-current="true"]) {
+  background: color-mix(in srgb, var(--text_color), transparent 85%);
+}
+
 @keyframes flashing {
   0% {
     background: var(--background_color);

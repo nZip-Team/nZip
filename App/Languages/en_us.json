@@ -1,0 +1,57 @@
+{
+  "language": "English (US)",
+  "symbol": "🇺🇸",
+
+  "Home": {
+    "Home": "Home",
+    "Easily download the doujinshi you like.": "Easily download the doujinshi you like.",
+    "The Sauce": "The Sauce",
+    "Terms": "Terms",
+    "and": "and",
+    "Privacy": "Privacy",
+    "GitHub": "GitHub"
+  },
+
+  "Download": {
+    "Connecting to the server...": "Connecting to the server...",
+    "Downloading the images...": "Downloading the images...",
+    "Packing the images...": "Packing the images...",
+    "Finish!": "Finish!",
+    "Download": "Download"
+  },
+
+  "Error": {
+    "Error": "Error",
+    "Back": "Back"
+  },
+
+  "Terms": {
+    "Terms of Service": "Terms of Service",
+    "Content Ownership": "Content Ownership",
+    "We do not own any of the content available on nhentai.net. All content is owned by the original illustrators and creators. Users are responsible for ensuring that their use of this tool complies with applicable copyright laws.": "We do not own any of the content available on nhentai.net. All content is owned by the original illustrators and creators. Users are responsible for ensuring that their use of this tool complies with applicable copyright laws.",
+    "Educational Use Only": "Educational Use Only",
+    "This project is intended for educational purposes only and should not be used for any other purposes.": "This project is intended for educational purposes only and should not be used for any other purposes.",
+    "No Affiliation": "No Affiliation",
+    "This project is not affiliated with or endorsed by nhentai.net.": "This project is not affiliated with or endorsed by nhentai.net.",
+    "By using nZip, you acknowledge that you have read and understood this Terms of Service and Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "By using nZip, you acknowledge that you have read and understood this Terms of Service and Privacy Policy document. If you do not agree with these terms, please refrain from using the service.",
+    "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.",
+    "Back": "Back",
+    "Privacy Policy": "Privacy Policy"
+  },
+
+  "Privacy": {
+    "Privacy Policy": "Privacy Policy",
+    "Data We Collect": "Data We Collect",
+    "Geolocation information, Browser type and version, Referrer URL, Device information.": "Geolocation information, Browser type and version, Referrer URL, Device information.",
+    "Data We Do Not Collect": "Data We Do Not Collect",
+    "We do not collect any information that can directly identify users, such as IP addresses.": "We do not collect any information that can directly identify users, such as IP addresses.",
+    "Purpose of Data Collection": "Purpose of Data Collection",
+    "The data we collect is used solely for improving the service and ensuring its proper functionality.": "The data we collect is used solely for improving the service and ensuring its proper functionality.",
+    "Data Sharing": "Data Sharing",
+    "We do not share or sell any collected data to third parties.": "We do not share or sell any collected data to third parties.",
+    "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.",
+    "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.",
+    "Back": "Back",
+    "Terms of Service": "Terms of Service"
+  }
+}

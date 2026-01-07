@@ -4,13 +4,13 @@ import path from 'path'
 import Log from '@icebrick/log'
 
 async function getPackageVersion(): Promise<string> {
-  const packageJsonPath = path.resolve(__dirname, '../package.json')
+  const packageJsonPath = path.resolve(process.cwd(), '../package.json')
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'))
   return packageJson.version
 }
 
 async function updateDockerfile(version: string): Promise<void> {
-  const dockerfilePath = path.resolve(__dirname, '../Dockerfile')
+  const dockerfilePath = path.resolve(process.cwd(), '../Dockerfile')
   const dockerfile = await readFile(dockerfilePath, 'utf-8')
   const created = new Date().toISOString()
   const updatedDockerfile = dockerfile
@@ -53,7 +53,7 @@ async function buildDockerImage(version: string): Promise<void> {
   for (const tag of tags) {
     await $`docker tag ${imageName} ${tag}`
   }
-  
+
   Log.info('Pushing Docker images...')
   for (const tag of [imageName, ...tags]) {
     await $`docker push ${tag}`

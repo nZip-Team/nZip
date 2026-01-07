@@ -40,7 +40,6 @@ class Pages {
     })
 
     this.filePath = './App'
-    if (!existsSync(path.join(__dirname, this.filePath))) this.filePath = '../App'
 
     this.getPage = this.getPage.bind(this)
     this.page = this.page.bind(this)
@@ -65,7 +64,8 @@ class Pages {
     Log.info('Loading pages...')
     for (const page of PAGE_NAMES) {
       try {
-        const rawmodule = require(`${this.filePath}/Pages/${page}`)
+        const filePath = path.join(process.cwd(), this.filePath, 'Pages', `${page}`)
+        const rawmodule = require(filePath)
         const module = rawmodule.default || rawmodule
         this.pageModules[page] = module
         this.cachedPages[page] = module
@@ -89,7 +89,7 @@ class Pages {
    */
   private setupHotReload(): void {
     if (process.env['NODE_ENV'] === 'development') {
-      const pagesDir = path.join(__dirname, `${this.filePath}/Pages`)
+      const pagesDir = path.join(process.cwd(), `${this.filePath}/Pages`)
       if (existsSync(pagesDir)) {
         this.watcher = watch(pagesDir, (eventType, filename) => {
           if (filename && eventType === 'change') {

@@ -1,13 +1,18 @@
-import { build } from 'tsdown'
+import fs from 'fs'
+import path from 'path'
 
-build({
-  entry: './App/Pages/*.tsx',
-  outDir: './dist/App/Pages',
+const entrypoints: string[] = []
+
+for (const fileName of fs.readdirSync(path.resolve(process.cwd(), './App/Pages'))) {
+  entrypoints.push(path.resolve(process.cwd(), `./App/Pages/${fileName}`))
+}
+
+await Bun.build({
+  entrypoints,
+  outdir: './dist/App/Pages',
 
   format: 'esm',
-  target: ['esnext'],
-  minify: true,
+  target: 'bun',
 
-  sourcemap: false,
-  clean: false
+  packages: 'external'
 })

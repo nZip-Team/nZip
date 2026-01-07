@@ -22,19 +22,20 @@ const concurrentImageDownloads = parseInt(process.env['CONCURRENT_IMAGE_DOWNLOAD
 const analytics = process.env['ANALYTICS'] || ''
 const development = process.env.NODE_ENV === 'development'
 
-if (fs.existsSync(path.join(__dirname, 'Server', 'Cache', 'Downloads'))) fs.rmSync(path.join(__dirname, 'Server', 'Cache', 'Downloads'), { recursive: true })
-if (fs.existsSync(path.join(__dirname, 'Cache', 'Downloads'))) fs.rmSync(path.join(__dirname, 'Cache', 'Downloads'), { recursive: true })
+const downloadDir = path.join(process.cwd(), fs.existsSync(path.join(process.cwd(), 'Server')) ? 'Server' : '', 'Cache', 'Downloads')
+fs.rmSync(downloadDir, { recursive: true, force: true })
+fs.mkdirSync(downloadDir, { recursive: true })
 
 async function start(): Promise<void> {
   await bundle()
 
-  Server(httpHost, httpPort, apiHost, imageHost, concurrentImageDownloads, analytics, version)
+  Server(httpHost, httpPort, apiHost, imageHost, downloadDir, concurrentImageDownloads, analytics, version)
 
   if (development) {
-    if (!fs.existsSync(path.join(__dirname, 'Server', 'Scripts'))) return
+    if (!fs.existsSync(path.join(process.cwd(), 'Server', 'Scripts'))) return
     let bundleTimeout: NodeJS.Timeout | null = null
 
-    fs.watch(path.join(__dirname, 'Server', 'Scripts'), { recursive: true }, () => {
+    fs.watch(path.join(process.cwd(), 'Server', 'Scripts'), { recursive: true }, () => {
       if (bundleTimeout) {
         clearTimeout(bundleTimeout)
       }

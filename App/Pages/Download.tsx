@@ -4,10 +4,13 @@
  * @param args.id Gallery ID
  * @param args.title Gallery title
  * @param args.cover Gallery cover
+ * @param args.t Translation function
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { id: string, title: string, cover: string }) => {
+export default (args: { id: string, title: string, cover: string, t: (key: string) => string }) => {
+  const t = args.t
+
   return {
     title: `nZip | ${args.id}`,
     description: args.title,
@@ -23,25 +26,25 @@ export default (args: { id: string, title: string, cover: string }) => {
                 <div style={{ marginBottom: '5rem' }}>
                   <div id="step-connect-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', opacity: '1', transition: 'opacity 0.5s' }}>
                     <div id="step-connect-status" style={{ border: '0.1rem solid var(--text_color)', borderRadius: '100%', width: '0.75rem', height: '0.75rem', marginRight: '1rem', animation: '1s flashing infinite' }}></div>
-                    <h1 className="text" style={{ fontSize: '1.25rem' }}>Connecting to the server...</h1>
+                    <h1 className="text" style={{ fontSize: '1.25rem' }}>{t('Connecting to the server...')}</h1>
                   </div>
                   <div id="step-download-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', opacity: '0.25', transition: 'opacity 0.5s' }}>
                     <div id="step-download-status" style={{ border: '0.1rem solid var(--text_color)', borderRadius: '100%', width: '0.75rem', height: '0.75rem', marginRight: '1rem' }}></div>
-                    <h1 className="text" style={{ fontSize: '1.25rem' }}>Downloading the images...</h1>
+                    <h1 className="text" style={{ fontSize: '1.25rem' }}>{t('Downloading the images...')}</h1>
                   </div>
                   <div id="step-pack-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', opacity: '0.25', transition: 'opacity 0.5s' }}>
                     <div id="step-pack-status" style={{ border: '0.1rem solid var(--text_color)', borderRadius: '100%', width: '0.75rem', height: '0.75rem', marginRight: '1rem' }}></div>
-                    <h1 className="text" style={{ fontSize: '1.25rem' }}>Packing the images...</h1>
+                    <h1 className="text" style={{ fontSize: '1.25rem' }}>{t('Packing the images...')}</h1>
                   </div>
                   <div id="step-finish-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', opacity: '0.25', transition: 'opacity 0.5s' }}>
                     <div id="step-finish-status" style={{ border: '0.1rem solid var(--text_color)', borderRadius: '100%', width: '0.75rem', height: '0.75rem', marginRight: '1rem' }}></div>
-                    <h1 className="text" style={{ fontSize: '1.25rem' }}>Finish!</h1>
+                    <h1 className="text" style={{ fontSize: '1.25rem' }}>{t('Finish!')}</h1>
                   </div>
                 </div>
                 <div style={{ width: 'calc(75% + (5rem - 2vw))' }}>
                   <div style={{ display: 'flex', marginBottom: '0.5rem' }}>
                     <h1 id="progress-text" className="text" style={{ flex: '1', fontSize: '1.25rem' }}>0%</h1>
-                    <a id="progress-result" className="text" style={{ fontSize: '1.25rem', transition: 'opacity 0.5s', opacity: '0' }}>Download</a>
+                    <a id="progress-result" className="text" style={{ fontSize: '1.25rem', transition: 'opacity 0.5s', opacity: '0' }}>{t('Download')}</a>
                   </div>
                   <div style={{ backgroundColor: 'color-mix(in srgb, var(--text_color), var(--background_color) 85%)', borderRadius: '1rem', width: '100%', height: '0.3rem', overflow: 'hidden' }}>
                     <div id="progress-bar" style={{ backgroundColor: 'var(--text_color)', width: '0%', height: '100%', transition: 'width 0.5s' }}></div>

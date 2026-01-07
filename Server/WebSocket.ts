@@ -38,13 +38,16 @@ export default class WebSocketHandler {
   private activeDownloads: Map<string, FileDownloader>
   private sessions: Map<string, DownloadSession>
   private concurrentImageDownloads: number
+  private downloadDir: string
 
-  constructor(nh: nhget, imageHost: string, concurrentImageDownloads: number) {
+  constructor(nh: nhget, imageHost: string, downloadDir:string, concurrentImageDownloads: number) {
     this.nh = nh
     this.imageHost = imageHost
     this.concurrentImageDownloads = concurrentImageDownloads
     this.activeDownloads = new Map()
     this.sessions = new Map()
+
+    this.downloadDir = downloadDir
   }
 
   /**
@@ -174,7 +177,7 @@ export default class WebSocketHandler {
   private async download(images: string[], session: DownloadSession, filename: string): Promise<boolean> {
     return new Promise(async (resolve) => {
       const hash = session.hash
-      const downloadDir = path.join(__dirname, 'Cache', 'Downloads', hash)
+      const downloadDir = path.join(this.downloadDir, hash)
       const urlCount = images.length
       const concurrentImageDownloads = Math.min(urlCount, this.concurrentImageDownloads)
 
@@ -392,7 +395,7 @@ export default class WebSocketHandler {
 
     if (session.clients.size === 0) {
       Log.info(`WS Session Idle: ${id} - ${ip}`)
-      const downloadPath = path.join(__dirname, 'Cache', 'Downloads', session.hash)
+      const downloadPath = path.join(this.downloadDir, session.hash)
       this.scheduleSessionCleanup(session, downloadPath)
     }
   }
@@ -411,7 +414,7 @@ export default class WebSocketHandler {
       }
 
       Log.info(`WS Download Start: ${response.id} - ${ip}`)
-      const downloadDir = path.join(__dirname, 'Cache', 'Downloads', hash)
+      const downloadDir = path.join(this.downloadDir, hash)
       fs.mkdirSync(downloadDir, { recursive: true })
 
       const images = response.images.pages.map((page, index) => {
@@ -516,7 +519,7 @@ export default class WebSocketHandler {
       this.activeDownloads.delete(session.hash)
     }
 
-    const downloadDir = path.join(__dirname, 'Cache', 'Downloads', session.hash)
+    const downloadDir = path.join(this.downloadDir, session.hash)
     this.rmDir(downloadDir)
     this.sessions.delete(session.hash)
   }
