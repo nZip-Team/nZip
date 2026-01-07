@@ -108,10 +108,10 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
   }))
 
   app.get('/download/:hash/:file', async (c) => {
-    try {
-      const hash = c.req.param('hash')
-      const fileName = decodeURIComponent(c.req.param('file'))
+    const hash = c.req.param('hash')
+    const fileName = decodeURIComponent(c.req.param('file'))
 
+    try {
       const filePath = sanitizePath(hash, downloadDir)
       const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
 
@@ -125,9 +125,19 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       const file = Bun.file(fileLoc)
       return new Response(file.slice(start, end))
     } catch {
+      const match = fileName.match(/^\[(\d+)\](.*?)\.zip$/)
       c.status(404)
+      let errorMessage = ''
+
+      if (match) {
+        const galleryId = match[1]
+        errorMessage = `The doujinshi with ID ${galleryId} is not available for download. You can go to <a href="/g/${galleryId}">this page</a> and get a new link.`
+      } else {
+        errorMessage = 'That file does not exist. You can go back <a href="/">home</a> and get a new link.'
+      }
+
       return Page(c, 'Error', {
-        error: 'That file does not exist. You can go back <a href="/">home</a> and get a new link.'
+        error: errorMessage
       })
     }
   })
