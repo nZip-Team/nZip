@@ -320,7 +320,10 @@ function sanitizePath(userInput: string, baseDir: string): string | null {
  */
 async function Page(c: Context, pagename: PageName, args?: null | Record<string, unknown>): Promise<Response> {
   try {
-    const lang = Languages.getLanguageFromCookie(c.req.header('Cookie'))
+    const cookieHeader = c.req.header('Cookie')
+    const lang = cookieHeader?.includes('language=') 
+      ? Languages.getLanguageFromCookie(cookieHeader)
+      : Languages.getLanguageFromHeader(c.req.header('Accept-Language'))
     const Args = {
       ...args,
       t: (key: string) => Languages.translate(lang, pagename, key)

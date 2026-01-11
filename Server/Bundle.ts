@@ -16,9 +16,9 @@ export default async (): Promise<void> => {
 
   let scripts: string[] = []
 
-  for (const fileName of fs.readdirSync(path.resolve(process.cwd(), './Server/Scripts'))) {
+  for (const fileName of fs.readdirSync(path.join(process.cwd(), 'Server/Scripts'))) {
     if (!fileName.endsWith('.ts') && !fileName.endsWith('.mjs')) continue
-    scripts.push(path.resolve(process.cwd(), `./Server/Scripts/${fileName}`).split(win32.sep).join(posix.sep))
+    scripts.push(path.join(process.cwd(), `Server/Scripts/${fileName}`).split(win32.sep).join(posix.sep))
   }
 
   await Bun.build({

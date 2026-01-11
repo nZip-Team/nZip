@@ -143,6 +143,31 @@ class Languages {
   }
 
   /**
+   * Get language from Accept-Language header
+   * @param acceptLanguageHeader Accept-Language header string
+   * @returns Language code (defaults to 'en_us')
+   */
+  public getLanguageFromHeader(acceptLanguageHeader: string | undefined): string {
+    if (!acceptLanguageHeader) return 'en_us'
+
+    const languages = acceptLanguageHeader.split(',').map(lang => 
+      lang.split(';')[0].trim().toLowerCase().replace('-', '_')
+    )
+
+    for (const lang of languages) {
+      if (this.languageModules[lang]) {
+        return lang
+      }
+      const baseLang = lang.split('_')[0]
+      if (this.languageModules[baseLang]) {
+        return baseLang
+      }
+    }
+
+    return 'en_us'
+  }
+
+  /**
    * Returns a list of available language codes with their metadata.
    * @returns An array of language objects with code, name, and symbol.
    */
