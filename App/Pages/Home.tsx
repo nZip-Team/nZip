@@ -20,7 +20,8 @@ export default (args: { version: string; t: (key: string) => string }) => {
         </div>
         <div id="language_modal" style={{ position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', background: 'rgba(0, 0, 0, 0.8)', display: 'none', alignItems: 'center', justifyContent: 'center', zIndex: '1000' }}>
           <div id="language_modal_content" style={{ background: 'var(--background_color)', border: '0.15rem solid var(--text_color)', borderRadius: '0.5rem', padding: '2rem', maxWidth: '20rem' }}>
-            <h2 className="text" style={{ fontSize: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>Select Language</h2>
+            <h1 className="text" style={{ fontSize: '1.5rem', marginBottom: '1.5rem', textAlign: 'center' }}>Select Language</h1>
+            <h1 className="text" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', textAlign: 'center'}} dangerouslySetInnerHTML={{ __html: t('Open Pull Requests on GitHub to add your own language!').replace(t('GitHub'), `<a href="https://github.com/nZip-Team/nZip" target="_blank">${t('GitHub')}</a>`)}}></h1>
             <div id="language_list"></div>
           </div>
         </div>

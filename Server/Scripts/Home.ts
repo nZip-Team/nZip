@@ -35,6 +35,12 @@ language_selector.addEventListener('click', async () => {
     const response = await fetch('/Languages')
     const availableLanguages = await response.json()
 
+    availableLanguages.sort((a: { code: string }, b: { code: string }) => {
+      if (a.code === 'en_us') return -1
+      if (b.code === 'en_us') return 1
+      return 0
+    })
+
     for (const lang of availableLanguages) {
       const button = document.createElement('button')
       button.className = 'text language-button'
