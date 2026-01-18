@@ -396,7 +396,9 @@ export default class WebSocketHandler {
     if (session.clients.size === 0) {
       Log.info(`WS Session Idle: ${id} - ${ip}`)
       const downloadPath = path.join(this.downloadDir, session.hash)
-      this.scheduleSessionCleanup(session, downloadPath)
+      if (!session.cleanupTimer) {
+        this.scheduleSessionCleanup(session, downloadPath)
+      }
     }
   }
 
