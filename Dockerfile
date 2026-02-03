@@ -15,7 +15,7 @@ LABEL org.opencontainers.image.description="Download doujinshis from nhentai.net
 LABEL org.opencontainers.image.version="1.12.0-beta"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.revision=""
-LABEL org.opencontainers.image.created="2026-01-18T10:40:26.405Z"
+LABEL org.opencontainers.image.created="2026-02-03T12:27:09.392Z"
 
 WORKDIR /workspace
 

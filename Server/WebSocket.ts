@@ -90,6 +90,17 @@ export default class WebSocketHandler {
               setTimeout(tryRemove, 500)
             } else {
               Log.error(`Failed to remove directory ${dirPath} after ${maxAttempts} attempts: ${error}`)
+              const hash = path.basename(dirPath)
+              if (this.sessions.has(hash)) {
+                const session = this.sessions.get(hash)!
+                session.lastDownloadBuffer = undefined
+                session.lastPackBuffer = undefined
+                session.lastLinkBuffer = undefined
+                session.downloadLink = undefined
+                session.filename = undefined
+                session.clients.clear()
+                this.sessions.delete(hash)
+              }
             }
             return false
           }
@@ -378,6 +389,9 @@ export default class WebSocketHandler {
     session.downloadLink = link
     const buffer = Buffer.concat([Buffer.from([0x20]), Buffer.from(link)])
     this.broadcastToSession(session, buffer, 'link')
+
+    session.lastDownloadBuffer = undefined
+    session.lastPackBuffer = undefined
   }
 
   private closeSessionClients(session: DownloadSession, code = 1000, reason?: string): void {
@@ -490,13 +504,18 @@ export default class WebSocketHandler {
         this.activeDownloads.delete(session.hash)
       }
 
-      this.rmDir(downloadDir)
-      this.sessions.delete(session.hash)
       session.lastDownloadBuffer = undefined
       session.lastPackBuffer = undefined
       session.lastLinkBuffer = undefined
       session.downloadLink = undefined
+      session.filename = undefined
+      session.downloadPromise = undefined
+      session.downloader = null
+      session.clients.clear()
       session.cleanupTimer = undefined
+
+      this.rmDir(downloadDir)
+      this.sessions.delete(session.hash)
     }, 3e5)
   }
 
