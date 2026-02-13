@@ -43,21 +43,11 @@ async function buildDockerImage(version: string): Promise<void> {
   Log.info('Updating Dockerfile...')
   await updateDockerfile(version)
 
-  Log.info('Pulling latest base image...')
-  await $`docker pull oven/bun:alpine`
+  const allTags = Array.from(new Set([imageName, ...tags]))
 
-  Log.info(`Building Docker image: ${imageName}`)
-  await $`docker build -t ${imageName} .`
-
-  Log.info('Tagging Docker image...')
-  for (const tag of tags) {
-    await $`docker tag ${imageName} ${tag}`
-  }
-
-  Log.info('Pushing Docker images...')
-  for (const tag of [imageName, ...tags]) {
-    await $`docker push ${tag}`
-  }
+  Log.info('Building and pushing multi-arch Docker images (linux/amd64, linux/arm64)...')
+  const tagArgs = allTags.flatMap((tag) => ['-t', tag])
+  await $`docker buildx build --platform linux/amd64,linux/arm64 ${tagArgs} --push .`
 
   Log.success('Docker image build and push complete.')
 }
