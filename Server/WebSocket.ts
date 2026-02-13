@@ -2,6 +2,7 @@ import { ZipFile } from 'yazl'
 import crypto from 'crypto'
 import path from 'path'
 import fs from 'fs'
+import { CronJob } from 'cron'
 
 import nhget, { type GalleryData } from '@icebrick/nhget'
 import FileDownloader from '@icebrick/file-downloader'
@@ -28,7 +29,7 @@ interface DownloadSession {
   lastLinkBuffer?: Buffer
   downloadLink?: string
   isAborting: boolean
-  cleanupTimer?: ReturnType<typeof setTimeout>
+  lastAccessTime: number
   downloadPromise?: Promise<void>
 }
 
@@ -39,6 +40,7 @@ export default class WebSocketHandler {
   private sessions: Map<string, DownloadSession>
   private concurrentImageDownloads: number
   private downloadDir: string
+  private cleanupCron?: CronJob
 
   constructor(nh: nhget, imageHost: string, downloadDir:string, concurrentImageDownloads: number) {
     this.nh = nh
@@ -48,6 +50,60 @@ export default class WebSocketHandler {
     this.sessions = new Map()
 
     this.downloadDir = downloadDir
+
+    this.cleanupCron = new CronJob('*/5 * * * *', () => {
+      this.cleanupStaleSessions()
+    })
+    this.cleanupCron.start()
+  }
+
+  /**
+   * Clean up stale sessions
+   */
+  private cleanupStaleSessions(): void {
+    const now = Date.now()
+    const sessionsToClean: string[] = []
+    const IDLE_TIMEOUT = 3e5 // 5 minutes
+    const FAILED_TIMEOUT = 6e4 // 1 minute
+
+    for (const [hash, session] of this.sessions.entries()) {
+      const idleTime = now - session.lastAccessTime
+      
+      if (session.clients.size === 0 && (!session.downloadCompleted || session.isAborting) && idleTime > FAILED_TIMEOUT) {
+        sessionsToClean.push(hash)
+      }
+      else if (session.clients.size === 0 && session.downloadCompleted && idleTime > IDLE_TIMEOUT) {
+        sessionsToClean.push(hash)
+      }
+    }
+
+    for (const hash of sessionsToClean) {
+      const session = this.sessions.get(hash)
+      if (session) {
+        Log.info(`Cleaning up stale session: ${session.id} (idle: ${Math.round((now - session.lastAccessTime) / 1000)}s)`)
+        this.clearSessionBuffers(session)
+        const downloadDir = path.join(this.downloadDir, session.hash)
+        this.rmDir(downloadDir)
+        this.sessions.delete(hash)
+      }
+    }
+  }
+
+  /**
+   * Dispose of the WebSocket handler and clean up resources
+   */
+  public dispose(): void {
+    if (this.cleanupCron) {
+      this.cleanupCron.stop()
+      this.cleanupCron = undefined
+    }
+
+    for (const session of this.sessions.values()) {
+      this.clearSessionBuffers(session)
+      session.clients.clear()
+    }
+    this.sessions.clear()
+    this.activeDownloads.clear()
   }
 
   /**
@@ -79,16 +135,26 @@ export default class WebSocketHandler {
       if (fs.existsSync(dirPath)) {
         let attempts = 0
         const maxAttempts = 3
+        let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+        const cleanup = () => {
+          if (retryTimer) {
+            clearTimeout(retryTimer)
+            retryTimer = null
+          }
+        }
 
         const tryRemove = () => {
           try {
             fs.rmSync(dirPath, { recursive: true, force: true })
+            cleanup()
             return true
           } catch (error) {
             attempts++
             if (attempts < maxAttempts) {
-              setTimeout(tryRemove, 500)
+              retryTimer = setTimeout(tryRemove, 500)
             } else {
+              cleanup()
               Log.error(`Failed to remove directory ${dirPath} after ${maxAttempts} attempts: ${error}`)
               const hash = path.basename(dirPath)
               if (this.sessions.has(hash)) {
@@ -138,15 +204,15 @@ export default class WebSocketHandler {
         wsRef.current = socket
         const session = this.getSession(id, hash)
         session.clients.add(socket)
+        session.lastAccessTime = Date.now()
         Log.info(`WS Client Join: ${id} - ${ip} (${session.clients.size})`)
 
-        if (session.cleanupTimer) {
-          clearTimeout(session.cleanupTimer)
-          session.cleanupTimer = undefined
-          Log.info(`WS Session Resume: ${id} - ${ip}`)
+        if (session.downloadCompleted && !session.downloadPromise && !this.hasDownloadArtifact(session)) {
+          Log.warn(`WS Replay Invalidated: ${id} - missing artifact, restarting flow`)
+          this.resetSessionForRedownload(session)
         }
 
-        this.sendSnapshotToClient(session, socket)
+        await this.sendSnapshotToClient(session, socket)
 
         if (!session.downloadCompleted && !session.downloadPromise) {
           Log.info(`WS Flow Start: ${id} - ${ip}`)
@@ -215,7 +281,7 @@ export default class WebSocketHandler {
         })
       }
 
-      downloader.on('progress', (completed, total) => {
+      const progressHandler = (completed: number, total: number) => {
         if (session.isAborting) {
           stopDownloads()
           return
@@ -227,7 +293,9 @@ export default class WebSocketHandler {
         buffer.writeUint16BE(total, 3)
 
         this.broadcastToSession(session, buffer, 'download')
-      })
+      }
+
+      downloader.on('progress', progressHandler)
 
       try {
         await downloader.download([{ urls: images }])
@@ -239,6 +307,7 @@ export default class WebSocketHandler {
         resolve(false)
         return
       } finally {
+        downloader.removeListener('progress', progressHandler)
         this.activeDownloads.delete(hash)
         session.downloader = null
       }
@@ -279,21 +348,36 @@ export default class WebSocketHandler {
 
         const zipfile = new ZipFile()
         const output = fs.createWriteStream(zipFilePath)
+        let hasError = false
 
         output.on('error', (err) => {
-          Log.error(`Error writing zip file for ${hash}: ${err}`)
-          this.signalSessionFailure(session, Buffer.from([0x11]), 1011, 'Internal Server Error')
-          resolve(false)
+          if (!hasError) {
+            hasError = true
+            Log.error(`Error writing zip file for ${hash}: ${err}`)
+            this.signalSessionFailure(session, Buffer.from([0x11]), 1011, 'Internal Server Error')
+            resolve(false)
+          }
+        })
+
+        zipfile.outputStream.on('error', (err) => {
+          if (!hasError) {
+            hasError = true
+            Log.error(`Error in zip stream for ${hash}: ${err}`)
+            this.signalSessionFailure(session, Buffer.from([0x11]), 1011, 'Internal Server Error')
+            resolve(false)
+          }
         })
 
         zipfile.outputStream
           .pipe(output)
           .on('close', () => {
-            resolve(true)
+            if (!hasError) {
+              resolve(true)
+            }
           })
 
         for (const filePath of existingFiles) {
-          if (session.isAborting) {
+          if (session.isAborting || hasError) {
             Log.info(`Aborting zip creation for ${hash}`)
             zipfile.end()
             resolve(false)
@@ -302,12 +386,17 @@ export default class WebSocketHandler {
 
           if (fs.existsSync(filePath)) {
             try {
-              zipfile.addFile(filePath, path.basename(filePath))
+              const stats = fs.statSync(filePath)
+              if (stats.size > 0) {
+                zipfile.addFile(filePath, path.basename(filePath))
+              } else {
+                Log.warn(`Skipping empty file for ${hash}: ${path.basename(filePath)}`)
+              }
             } catch (err) {
               Log.error(`Error adding file to zip for ${hash}: ${err}`)
             }
           } else {
-            Log.warn(`File no longer exists for ${hash}, skipping: ${filePath}`)
+            Log.warn(`File no longer exists for ${hash}, skipping: ${path.basename(filePath)}`)
           }
         }
 
@@ -335,14 +424,34 @@ export default class WebSocketHandler {
       clients: new Set(),
       downloader: null,
       downloadCompleted: false,
-      isAborting: false
+      isAborting: false,
+      lastAccessTime: Date.now()
     }
 
     this.sessions.set(hash, session)
     return session
   }
 
-  private sendSnapshotToClient(session: DownloadSession, ws: ServerWebSocket): void {
+  private hasDownloadArtifact(session: DownloadSession): boolean {
+    if (!session.filename) {
+      return false
+    }
+
+    const zipPath = path.join(this.downloadDir, session.hash, session.filename)
+    return fs.existsSync(zipPath)
+  }
+
+  private resetSessionForRedownload(session: DownloadSession): void {
+    session.downloadCompleted = false
+    session.isAborting = false
+    session.downloadLink = undefined
+    session.filename = undefined
+    session.lastLinkBuffer = undefined
+    session.lastDownloadBuffer = undefined
+    session.lastPackBuffer = undefined
+  }
+
+  private async sendSnapshotToClient(session: DownloadSession, ws: ServerWebSocket): Promise<void> {
     if (ws.readyState !== 1) {
       return
     }
@@ -357,6 +466,7 @@ export default class WebSocketHandler {
 
     if (session.lastLinkBuffer) {
       ws.send(session.lastLinkBuffer)
+      await new Promise(resolve => setTimeout(resolve, 500))
       ws.close()
     }
   }
@@ -384,14 +494,22 @@ export default class WebSocketHandler {
     }
   }
 
-  private broadcastDownloadLink(session: DownloadSession, filename: string): void {
+  private async broadcastDownloadLink(session: DownloadSession, filename: string): Promise<void> {
     const link = `/download/${session.hash}/${encodeURIComponent(filename)}`
     session.downloadLink = link
     const buffer = Buffer.concat([Buffer.from([0x20]), Buffer.from(link)])
     this.broadcastToSession(session, buffer, 'link')
 
+    await new Promise(resolve => setTimeout(resolve, 500))
+
     session.lastDownloadBuffer = undefined
     session.lastPackBuffer = undefined
+  }
+
+  private clearSessionBuffers(session: DownloadSession): void {
+    session.lastDownloadBuffer = undefined
+    session.lastPackBuffer = undefined
+    session.lastLinkBuffer = undefined
   }
 
   private closeSessionClients(session: DownloadSession, code = 1000, reason?: string): void {
@@ -408,11 +526,8 @@ export default class WebSocketHandler {
     session.clients.delete(ws)
 
     if (session.clients.size === 0) {
+      session.lastAccessTime = Date.now()
       Log.info(`WS Session Idle: ${id} - ${ip}`)
-      const downloadPath = path.join(this.downloadDir, session.hash)
-      if (!session.cleanupTimer) {
-        this.scheduleSessionCleanup(session, downloadPath)
-      }
     }
   }
 
@@ -420,11 +535,17 @@ export default class WebSocketHandler {
     const hash = session.hash
 
     try {
+      Log.info(`Fetching gallery metadata: ${id}`)
       const response: GalleryData = (await this.nh.get(id)) as GalleryData
 
       if (response.error) {
         session.isAborting = true
+        Log.warn(`Gallery not found: ${id}`)
+        const errorBuffer = Buffer.from([0x01])
+        this.broadcastToSession(session, errorBuffer)
+        await new Promise(resolve => setTimeout(resolve, 100))
         this.closeSessionClients(session, 1008, 'Resource Not Found')
+        this.clearSessionBuffers(session)
         this.sessions.delete(hash)
         return
       }
@@ -457,18 +578,21 @@ export default class WebSocketHandler {
 
       if (success) {
         session.downloadCompleted = true
+        session.lastAccessTime = Date.now()
         Log.info(`WS Download End: ${response.id} - ${ip}`)
-        this.broadcastDownloadLink(session, filename)
+        await this.broadcastDownloadLink(session, filename)
         this.closeSessionClients(session)
         this.cleanTempFiles(downloadDir, filename)
-        this.scheduleSessionCleanup(session, downloadDir)
       } else {
         Log.error(`Failed to download gallery: ${response.id}`)
-        this.signalSessionFailure(session, Buffer.from([0x20]), 1011, 'Internal Server Error')
+        this.signalSessionFailure(session, Buffer.from([0x01]), 1011, 'Download Failed')
       }
     } catch (error) {
-      Log.error(`Error in WebSocket handler: ${error}`)
-      this.signalSessionFailure(session, Buffer.from([0x20]), 1011, 'Internal Server Error')
+      Log.error(`Error in WebSocket handler for ${id}: ${error}`)
+      if (error instanceof Error && error.stack) {
+        Log.error(`Stack trace: ${error.stack}`)
+      }
+      this.signalSessionFailure(session, Buffer.from([0x01]), 1011, 'Internal Server Error')
     }
   }
 
@@ -488,50 +612,15 @@ export default class WebSocketHandler {
     }
   }
 
-  private scheduleSessionCleanup(session: DownloadSession, downloadDir: string): void {
-    if (session.cleanupTimer) {
-      clearTimeout(session.cleanupTimer)
-    }
-
-    session.cleanupTimer = setTimeout(() => {
-      Log.info(`WS Session Timeout: ${session.id}`)
-
-      if (session.downloader && !session.downloadCompleted) {
-        session.isAborting = true
-        session.downloader.stop().catch((error) => {
-          Log.warn(`Failed to stop downloader during timeout for ${session.hash}: ${error}`)
-        })
-        this.activeDownloads.delete(session.hash)
-      }
-
-      session.lastDownloadBuffer = undefined
-      session.lastPackBuffer = undefined
-      session.lastLinkBuffer = undefined
-      session.downloadLink = undefined
-      session.filename = undefined
-      session.downloadPromise = undefined
-      session.downloader = null
-      session.clients.clear()
-      session.cleanupTimer = undefined
-
-      this.rmDir(downloadDir)
-      this.sessions.delete(session.hash)
-    }, 3e5)
-  }
-
   private signalSessionFailure(session: DownloadSession, buffer: Buffer, closeCode: number, reason: string): void {
     if (session.isAborting) {
       return
     }
 
     session.isAborting = true
+    session.lastAccessTime = Date.now()
     this.broadcastToSession(session, buffer)
     this.closeSessionClients(session, closeCode, reason)
-
-    if (session.cleanupTimer) {
-      clearTimeout(session.cleanupTimer)
-      session.cleanupTimer = undefined
-    }
 
     if (session.downloader) {
       session.downloader.stop().catch((error) => {
@@ -539,6 +628,11 @@ export default class WebSocketHandler {
       })
       this.activeDownloads.delete(session.hash)
     }
+
+    this.clearSessionBuffers(session)
+    session.downloadLink = undefined
+    session.filename = undefined
+    session.downloadPromise = undefined
 
     const downloadDir = path.join(this.downloadDir, session.hash)
     this.rmDir(downloadDir)

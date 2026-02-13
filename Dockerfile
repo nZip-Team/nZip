@@ -12,10 +12,10 @@ LABEL org.opencontainers.image.url="https://ghcr.io/nzip-team/nzip"
 LABEL org.opencontainers.image.source="https://github.com/nZip-Team/nZip"
 LABEL org.opencontainers.image.title="nZip"
 LABEL org.opencontainers.image.description="Download doujinshis from nhentai.net as a zip archive."
-LABEL org.opencontainers.image.version="1.12.0-beta"
+LABEL org.opencontainers.image.version="1.12.0"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.revision=""
-LABEL org.opencontainers.image.created="2026-02-03T12:27:09.392Z"
+LABEL org.opencontainers.image.created="2026-02-13T11:44:03.219Z"
 
 WORKDIR /workspace
 

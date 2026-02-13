@@ -124,7 +124,7 @@ socket.addEventListener('open', () => {
 
       statusAnimation(step_finish_container, step_finish_status, 'success')
 
-      const url = new TextDecoder().decode(buffer)
+      const url = new TextDecoder().decode(buffer.slice(1))
 
       progress_text.innerHTML = '100%'
       progress_result.href = url
