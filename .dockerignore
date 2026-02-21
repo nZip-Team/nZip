@@ -5,3 +5,4 @@ bun.lockb
 Server/Cache/
 
 .env
+sessions.db*

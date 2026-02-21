@@ -6,15 +6,16 @@ import type { PageModule } from './Pages'
  * @param args Additional arguments, including optional analytics script URL.
  * @returns A complete HTML document as a string.
  */
-export default (page: ReturnType<PageModule>, args: { analytics?: string | null }) => {
+export default (page: ReturnType<PageModule>, args: { analytics?: string | null; lang?: string }) => {
+  const htmlLang = args.lang ? args.lang.replace('_', '-') : 'en'
   const html = (
-    <html lang="en">
+    <html lang={htmlLang}>
       <head>
         <title>{page.title}</title>
         <meta name="title" content={page.title} />
         <meta name="description" content={page.description} />
-        <meta name="og:title" content={page.title} />
-        <meta name="og:description" content={page.description} />
+        <meta property="og:title" content={page.title} />
+        <meta property="og:description" content={page.description} />
         {page.keywords && <meta name="keywords" content={page.keywords} />}
 
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />

@@ -1,7 +1,7 @@
 import path, { win32, posix } from 'path'
 import fs from 'fs'
 
-import Log from '@icebrick/log'
+import Log from './Modules/Log'
 
 /**
  * Bundle scripts

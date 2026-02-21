@@ -35,47 +35,9 @@ mkdir nzip
 cd nzip
 ```
 
-Then, create a `compose.yml` file in the `nzip` directory with the following content:
+Then, copy the [compose.yml](compose.yml) file into the `nzip` directory.
 
-```yaml
-services:
-  nzip-server:
-    container_name: nzip-server
-    image: ghcr.io/nzip-team/nzip:latest
-    ports:
-      - '3000:3000'
-    environment:
-      - HOST=${HOST}
-      - PORT=${PORT}
-      - API_URL=${API_URL}
-      - IMAGE_URL=${IMAGE_URL}
-      - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
-      - ANALYTICS=${ANALYTICS}
-      - NODE_ENV=${NODE_ENV}
-    network_mode: bridge
-    restart: unless-stopped
-```
-
-Create a `.env` file and configure the environment variables:
-
-```sh
-# Set the host and port for the nZip server (Host is the URL where the server will be accessible)
-HOST=http://localhost:3000
-PORT=3000
-
-# Both API_URL and IMAGE_URL must be set to start the server
-API_URL=
-IMAGE_URL=
-
-# Number of concurrent image downloads for each download session (default: 16)
-CONCURRENT_IMAGE_DOWNLOADS=16
-
-# Optional
-ANALYTICS=
-
-# Set to production if you want to run the server in production mode
-NODE_ENV=development
-```
+Copy the [.env.example](.env.example) file into the `nzip` directory and rename it to `.env`, then open it in your favorite text editor and configure the environment variables.
 
 Then, run the following command to run the Docker container:
 
@@ -97,7 +59,7 @@ Follow the instructions in the [Development](#development) section to run the pr
 
 ## Development
 
-nZip is built using TypeScript and [Bun](https://bun.sh/). To run the project locally, clone the repository and execute the following commands after configuring the `.env` file:
+nZip is built using [TypeScript](https://www.typescriptlang.org/) and [Bun](https://bun.sh/). To run the project locally, clone the repository and execute the following commands after configuring the `.env` file:
 
 ```bash
 bun install

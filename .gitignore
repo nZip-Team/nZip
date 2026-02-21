@@ -7,5 +7,6 @@ Server/Cache/
 dist/
 
 .env
+sessions.db*
 
 .DS_Store

@@ -1,8 +1,7 @@
-import fs from 'fs'
+import fs, { existsSync, watch, type FSWatcher } from 'fs'
 import path from 'path'
-import { existsSync, watch, type FSWatcher } from 'fs'
 
-import Log from '@icebrick/log'
+import Log from './Log'
 
 export interface LanguageData {
   language: string
@@ -133,13 +132,14 @@ class Languages {
   public getLanguageFromCookie(cookieHeader: string | undefined): string {
     if (!cookieHeader) return 'en_us'
 
-    const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-      const [key, value] = cookie.trim().split('=')
-      acc[key] = value
-      return acc
-    }, {} as Record<string, string>)
+    const langIndex = cookieHeader.indexOf('language=')
+    if (langIndex === -1) return 'en_us'
 
-    return cookies['language'] || 'en_us'
+    const start = langIndex + 9 // length of 'language='
+    const end = cookieHeader.indexOf(';', start)
+    const lang = end === -1 ? cookieHeader.slice(start) : cookieHeader.slice(start, end)
+
+    return lang.trim() || 'en_us'
   }
 
   /**
@@ -150,16 +150,17 @@ class Languages {
   public getLanguageFromHeader(acceptLanguageHeader: string | undefined): string {
     if (!acceptLanguageHeader) return 'en_us'
 
-    const languages = acceptLanguageHeader.split(',').map(lang => 
-      lang.split(';')[0].trim().toLowerCase().replace('-', '_')
-    )
+    const languages = acceptLanguageHeader.split(',')
 
     for (const lang of languages) {
-      if (this.languageModules[lang]) {
-        return lang
+      const normalized = lang.split(';')[0].trim().toLowerCase().replace('-', '_')
+
+      if (this.languageModules[normalized]) {
+        return normalized
       }
-      const baseLang = lang.split('_')[0]
-      if (this.languageModules[baseLang]) {
+
+      const baseLang = normalized.split('_')[0]
+      if (baseLang !== normalized && this.languageModules[baseLang]) {
         return baseLang
       }
     }

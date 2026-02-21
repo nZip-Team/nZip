@@ -2,60 +2,109 @@ import Bun from 'bun'
 import { Hono, type Context } from 'hono'
 import { upgradeWebSocket, websocket } from 'hono/bun'
 import { getConnInfo } from 'hono/bun'
+import { languageDetector } from 'hono/language'
 
+import fs from 'fs'
 import path from 'path'
 
-import nhget, { type GalleryData } from '@icebrick/nhget'
-import Log from '@icebrick/log'
+import Config from '../Config'
 
-import Pages, { type PageName } from './Pages'
+import nhget, { type GalleryData } from '@icebrick/nhget'
+import Log from './Modules/Log'
+
+import Pages, { type PageName } from './Modules/Pages'
 import WebSocketHandler from './WebSocket'
-import Languages from './Language'
+import Languages from './Modules/Language'
+
+import { createSessionStore } from './Session'
+
+type AppEnv = { Variables: { language: string } }
+type AppContext = Context<AppEnv>
 
 let analytics: string | null = null
 
 let filePath = './App'
 
+const CacheStore = new Map<string, string>()
+const CACHE_MAX_SIZE = 200
+
+// In development, flush all CacheStore entries for a page when it is reloaded
+if (process.env['NODE_ENV'] === 'development') {
+  Pages.onReload((pageName) => {
+    for (const key of Array.from(CacheStore.keys())) {
+      if (key.startsWith(`${pageName}:`)) CacheStore.delete(key)
+    }
+    Log.info(`Cache cleared for page: ${pageName}`)
+  })
+}
+
+const downloadDir = path.join(process.cwd(), fs.existsSync(path.join(process.cwd(), 'Server')) ? 'Server' : '', 'Cache', 'Downloads')
+if (!fs.existsSync(downloadDir)) {
+  fs.mkdirSync(downloadDir, { recursive: true })
+}
+
 /**
  * Start the server
- * @param host Hostname (which will only be used for logging)
- * @param port Port
- * @param apiHost API host
- * @param imageHost Image host
- * @param downloadDir Download directory
- * @param concurrentImageDownloads Number of concurrent image downloads
- * @param analytic Analytics data
- * @param version nZip version
  */
-export default (host: string, port: number, apiHost: string, imageHost: string, downloadDir: string, concurrentImageDownloads: number, analytic: string, version: string) => {
+export default (): (() => Promise<void>) => {
   const nh = new nhget({
-    endpoint: `${apiHost}/api/gallery/`,
-    imageEndpoint: `${imageHost}/galleries/`
+    endpoint: `${Config.apiHost}/api/gallery/`,
+    imageEndpoint: `${Config.imageHost}/galleries/`
   })
 
-  const WSHandler = new WebSocketHandler(nh, imageHost, downloadDir, concurrentImageDownloads)
+  const storeType = process.env['SESSION_STORE'] || 'sqlite'
+  const sessionStore = createSessionStore(storeType)
 
-  analytics = analytic || null
+  Log.info(`Session store: ${storeType}`)
 
-  const app = new Hono()
+  const WSHandler = new WebSocketHandler(nh, downloadDir, sessionStore)
+
+  analytics = Config.analytics || null
+
+  const supportedLanguages = Languages.getAvailableLanguages().map((l) => l.code)
+  if (!supportedLanguages.includes('en_us')) supportedLanguages.push('en_us')
+
+  const app = new Hono<AppEnv>()
+
+  app.use(
+    languageDetector({
+      supportedLanguages,
+      fallbackLanguage: 'en_us',
+      order: ['querystring', 'cookie', 'header'],
+      lookupQueryString: 'lang',
+      lookupCookie: 'language',
+      lookupFromHeaderKey: 'accept-language',
+      // Normalise any detected code (e.g. "zh-TW", "en-US") to the internal
+      // underscore format used by the language JSON files (e.g. "zh_tw").
+      convertDetectedLanguage: (lang) => lang.toLowerCase().replace(/-/g, '_'),
+      caches: ['cookie'],
+      cookieOptions: {
+        sameSite: 'Lax',
+        // Must be false: the client-side Home.js reads and writes this cookie
+        // via document.cookie to persist the user's language preference.
+        httpOnly: false,
+        secure: false,
+        maxAge: 365 * 24 * 60 * 60,
+      },
+    })
+  )
 
   app.use(async (c, next) => {
-    c.header('X-Powered-By', `nZip ${version}`)
+    c.header('X-Powered-By', `nZip ${Config.version}`)
     await next()
-    Log.info(`${c.req.method} ${c.req.path} ${c.res.status} - ${getIP(c)}`)
+    c.header('X-Content-Type-Options', 'nosniff')
+    c.header('X-Frame-Options', 'SAMEORIGIN')
+    c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    setImmediate(() => {
+      Log.info(`${c.req.method} ${c.req.path} ${c.res.status} - ${getIP(c)}`)
+    })
   })
 
-  app.on('GET', ['/', '/home'], (c) => {
-    return Page(c, 'Home', { version })
-  })
+  app.on('GET', ['/', '/home'], (c) => StaticPage(c, 'Home', { version: Config.version }))
 
-  app.get('/terms', (c) => {
-    return Page(c, 'Terms')
-  })
+  app.get('/terms', (c) => StaticPage(c, 'Terms'))
 
-  app.get('/privacy', (c) => {
-    return Page(c, 'Privacy')
-  })
+  app.get('/privacy', (c) => StaticPage(c, 'Privacy'))
 
   app.get('/g/:id', async (c) => {
     let id = c.req.param('id')
@@ -78,7 +127,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
         const type = response.images.pages[0].t
         const extension = type === 'j' ? 'jpg' : type === 'g' ? 'gif' : type === 'w' ? 'webp' : 'png'
         const title = response.title.english || response.title.japanese || response.title.pretty || null
-        const cover = `${imageHost}/galleries/${response.media_id}/1.${extension}`
+        const cover = `${Config.imageHost}/galleries/${response.media_id}/1.${extension}`
         return Page(c, 'Download', { id, title, cover })
       }
     } catch (error) {
@@ -95,6 +144,8 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
           })
         }
       }
+      c.status(500)
+      return Page(c, 'Error', { error: 'An unexpected error occurred. Please go back to <a href="/">home</a>.' })
     }
   })
 
@@ -103,6 +154,7 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     return c.redirect(`/g/${id}`)
   })
 
+  // TODO: Rate limit
   app.get('/ws/g/:id', upgradeWebSocket((c) => {
     return WSHandler.handle(c)
   }))
@@ -115,23 +167,38 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
       const filePath = sanitizePath(hash, downloadDir)
       const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
 
-      if (!filePath || !fileLoc) throw true
+      if (!filePath || !fileLoc) throw new Error('Invalid path')
 
       if (!fileName.endsWith('.zip')) throw new Error('Invalid File')
       if (!(await Bun.file(fileLoc).exists())) throw new Error('File does not exist')
 
-      const [start, end] = parseRangeHeader(c.req.header('Range'))
+      const rangeHeader = c.req.header('Range')
+      const [start, end] = parseRangeHeader(rangeHeader)
 
       const file = Bun.file(fileLoc)
-      return new Response(file.slice(start, end))
+      const fileSize = file.size
+      const effectiveEnd = end === Infinity ? fileSize : Math.min(end + 1, fileSize)
+
+      const responseHeaders: Record<string, string> = {
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+        'Content-Type': 'application/zip',
+      }
+
+      if (rangeHeader) {
+        responseHeaders['Content-Range'] = `bytes ${start}-${effectiveEnd - 1}/${fileSize}`
+        responseHeaders['Accept-Ranges'] = 'bytes'
+        return new Response(file.slice(start, effectiveEnd), { status: 206, headers: responseHeaders })
+      }
+
+      return new Response(file, { headers: responseHeaders })
     } catch {
       const match = fileName.match(/^\[(\d+)\](.*?)\.zip$/)
       c.status(404)
       let errorMessage = ''
 
       if (match) {
-        const galleryId = match[1]
-        errorMessage = `The doujinshi with ID ${galleryId} is not available for download. You can go to <a href="/g/${galleryId}">this page</a> and get a new link.`
+        const galleryID = match[1]
+        errorMessage = `The doujinshi with ID ${galleryID} is not available for download. You can go to <a href="/g/${galleryID}">this page</a> and get a new link.`
       } else {
         errorMessage = 'That file does not exist. You can go back <a href="/">home</a> and get a new link.'
       }
@@ -142,71 +209,23 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
     }
   })
 
-  app.get('/Scripts/:script', async (c) => {
-    try {
-      const scriptName = c.req.param('script')
-      const scriptPath = sanitizePath(scriptName, `${filePath}/Scripts`)
+  app.get('/Scripts/:script', (c) =>
+    Static(c, 'script', 'Scripts', 'text/javascript', {
+      error: "console.error('Script Not Found')"
+    })
+  )
 
-      if (!scriptPath) throw true
+  app.get('/Styles/:style', (c) =>
+    Static(c, 'style', 'Styles', 'text/css', {
+      error: 'What style? Do you mean <a href="/g/228922">this</a>?'
+    })
+  )
 
-      if (!(await Bun.file(scriptPath).exists())) throw new Error('Script does not exist')
-      return new Response(Bun.file(scriptPath), {
-        headers: {
-          'Content-Type': 'text/javascript'
-        }
-      })
-    } catch {
-      c.status(404)
-      return Page(c, 'Error', {
-        error: "console.error('Script Not Found')"
-      })
-    }
-  })
-
-  app.get('/Styles/:style', async (c) => {
-    try {
-      const styleName = c.req.param('style')
-      const stylePath = sanitizePath(styleName, `${filePath}/Styles`)
-
-      if (!stylePath) throw true
-
-      if (!(await Bun.file(stylePath).exists())) throw new Error('Style does not exist')
-      return new Response(Bun.file(stylePath), {
-        headers: {
-          'Content-Type': 'text/css'
-        }
-      })
-    } catch {
-      c.status(404)
-      return Page(c, 'Error', {
-        error: 'What style? Do you mean <a href="/g/228922">this</a>?'
-      })
-    }
-  })
-
-  app.get('/Images/:image', async (c) => {
-    try {
-      const imageName = c.req.param('image')
-      const imagePath = sanitizePath(imageName, `${filePath}/Images`)
-
-      if (!imagePath) {
-        throw new Error()
-      }
-
-      if (!(await Bun.file(imagePath).exists())) throw new Error('Image does not exist')
-      const bunFile = Bun.file(imagePath)
-      return new Response(bunFile, {
-        headers: {
-          'Content-Type': bunFile.type
-        }
-      })
-    } catch {
-      c.status(404)
-      return Page(c, 'Error', {
-        error: "The image you're trying to find does not exist. You probably have some mental disorders, please contact your doctor for professional help."
-      })
-    }
-  })
+  app.get('/Images/:image', (c) =>
+    Static(c, 'image', 'Images', 'auto', {
+      error: "The image you're trying to find does not exist. You probably have some mental disorders, please contact your doctor for professional help."
+    }, 'public, max-age=31536000, immutable')
+  )
 
   app.get('/Languages', (c) => {
     return c.json(Languages.getAvailableLanguages())
@@ -245,13 +264,55 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
 
   Log.info('Starting nZip Server...')
 
-  Bun.serve({
-    port,
+  const server = Bun.serve({
+    port: Config.httpPort,
     fetch: app.fetch,
-    websocket
+    websocket,
+    reusePort: true,
+    development: false,
+    maxRequestBodySize: 1024 * 1024 * 10 // 10MB
   })
 
-  Log.success(`nZip running on ${host}/`)
+  Log.success(`nZip running on ${Config.httpHost}/`)
+
+  return async () => {
+    Log.info('Shutting down server...')
+    
+    try {
+      server.stop(true)
+      Log.info('Server stopped')
+    } catch (error) {
+      Log.error(`Error stopping server: ${error}`)
+    }
+
+    try {
+      await WSHandler.close()
+      Log.info('WebSocket handler closed')
+    } catch (error) {
+      Log.error(`Error closing WebSocket handler: ${error}`)
+    }
+
+    try {
+      await sessionStore.close()
+      Log.info('Session store closed')
+    } catch (error) {
+      Log.error(`Error closing session store: ${error}`)
+    }
+
+    try {
+      Languages.shutdown()
+    } catch (error) {
+      Log.error(`Error closing language watcher: ${error}`)
+    }
+
+    try {
+      Pages.shutdown()
+    } catch (error) {
+      Log.error(`Error closing page watcher: ${error}`)
+    }
+
+    Log.success('Shutdown complete')
+  }
 }
 
 /**
@@ -262,7 +323,11 @@ export default (host: string, port: number, apiHost: string, imageHost: string, 
 export function getIP(c: Context): string {
   try {
     const forwardedFor = c.req.header('X-Forwarded-For')
-    return forwardedFor ? forwardedFor.split(',')[0].trim() : getConnInfo(c).remote.address || 'unknown'
+    if (forwardedFor) {
+      const candidate = forwardedFor.split(',')[0].trim()
+      if (/^[0-9a-fA-F:.]{1,45}$/.test(candidate)) return candidate
+    }
+    return getConnInfo(c).remote.address || 'unknown'
   } catch {
     return 'unknown'
   }
@@ -281,8 +346,8 @@ function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
     if (!rangeValue) return [0, Infinity]
 
     const [startStr, endStr] = rangeValue.split('-')
-    const startNum = startStr ? parseInt(startStr) : 0
-    const endNum = endStr ? parseInt(endStr) : Infinity
+    const startNum = startStr ? parseInt(startStr, 10) : 0
+    const endNum = endStr ? parseInt(endStr, 10) : Infinity
 
     if (isNaN(startNum)) return [0, endNum]
     if (isNaN(endNum)) return [startNum, Infinity]
@@ -313,25 +378,100 @@ function sanitizePath(userInput: string, baseDir: string): string | null {
 }
 
 /**
- * Render a page with the provided arguments
+ * Get language of the user from the context.
+ * @param c Context containing request and response information
+ * @returns Language code (defaults to 'en_us')
+ */
+export function getLang(c: AppContext): string {
+  return c.get('language')
+}
+
+/**
+ * Serve a static file from a directory
+ * @param c Context containing request and response information
+ * @param paramName The name of the URL parameter containing the file name
+ * @param dir The directory to serve files from
+ * @param contentType The content type of the file
+ * @param errorPage The error page data to use if the file is not found
+ * @param cacheControl Optional Cache-Control header value
+ * @returns A Response object containing the file or an error page
+ */
+async function Static(c: AppContext, paramName: string, dir: string, contentType: string, errorPage: Record<string, unknown>, cacheControl?: string): Promise<Response> {
+  try {
+    const fileName = c.req.param(paramName)
+    const fullPath = sanitizePath(fileName, `${filePath}/${dir}`)
+
+    if (!fullPath) throw new Error()
+
+    if (!(await Bun.file(fullPath).exists())) throw new Error('File does not exist')
+    const bunFile = Bun.file(fullPath)
+    const headers: Record<string, string> = {
+      'Content-Type': contentType === 'auto' ? bunFile.type : contentType
+    }
+    if (cacheControl) {
+      headers['Cache-Control'] = cacheControl
+    }
+    return new Response(bunFile, { headers })
+  } catch {
+    c.status(404)
+    return Page(c, 'Error', errorPage)
+  }
+}
+
+/**
+ * Serve a cached static page
+ * @param c Context containing request and response information
+ * @param pagename The name of the page to serve
+ * @param args Optional arguments to pass to the page
+ * @returns A Response object containing the cached page
+ */
+function StaticPage(c: AppContext, pagename: PageName, args?: Record<string, unknown>): Response {
+  const lang = getLang(c)
+  const cacheKey = `${pagename}:${lang}:${args ? JSON.stringify(args) : ''}`
+
+  let cached = CacheStore.get(cacheKey)
+  if (cached) {
+    return c.html(cached)
+  }
+
+  const html = RenderPage(c, pagename, args)
+  if (CacheStore.size >= CACHE_MAX_SIZE) {
+    const oldestKey = CacheStore.keys().next().value
+    if (oldestKey !== undefined) CacheStore.delete(oldestKey)
+  }
+  CacheStore.set(cacheKey, html)
+  return c.html(html)
+}
+
+/**
+ * Serve the HTML of a page
+ * @param c Context containing request and response information
+ * @param pagename The name of the page to render
+ * @param args Optional arguments to pass to the page
+ * @returns A string containing the rendered HTML of the page
+ */
+function Page(c: AppContext, pagename: PageName, args?: null | Record<string, unknown>): Response {
+  const html = RenderPage(c, pagename, args)
+  return c.html(html)
+}
+
+/**
+ * Render a page and return HTML string
  * @param page The page to render
  * @param args Optional arguments to pass to the page
  * @returns A string containing the rendered HTML of the page
  */
-async function Page(c: Context, pagename: PageName, args?: null | Record<string, unknown>): Promise<Response> {
+function RenderPage(c: AppContext, pagename: PageName, args?: null | Record<string, unknown>): string {
   try {
-    const cookieHeader = c.req.header('Cookie')
-    const lang = cookieHeader?.includes('language=') 
-      ? Languages.getLanguageFromCookie(cookieHeader)
-      : Languages.getLanguageFromHeader(c.req.header('Accept-Language'))
+    const lang = getLang(c)
     const Args = {
       ...args,
       t: (key: string) => Languages.translate(lang, pagename, key)
     }
 
-    return c.html(Pages.page(pagename, Args).render({ analytics }))
+    return Pages.page(pagename, Args).render({ analytics, lang })
   } catch (error) {
-    Log.error(error)
-    return c.html('<!DOCTYPE html><html><body>Page Not Found</body></html>')
+    setImmediate(() => Log.error(error))
+    return '<!DOCTYPE html><html><body>Page Not Found</body></html>'
   }
 }
