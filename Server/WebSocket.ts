@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -177,7 +176,7 @@ export default class WebSocketHandler {
    */
   public handle(c: Context<BlankEnv, '/ws/g/:id', BlankInput>): WSEvents<ServerWebSocket> {
     const id = c.req.param('id')
-    const hash = crypto.createHash('md5').update(id).digest('hex')
+    const hash = new Bun.CryptoHasher('md5').update(id).digest('hex')
     const ip = getIP(c)
     const wsRef: { current: ServerWebSocket | null } = { current: null }
 
@@ -630,7 +629,7 @@ export default class WebSocketHandler {
   /**
    * Clean up stale in-memory sessions
    */
-  private cleanupStaleSessions(): void {
+  private async cleanupStaleSessions(): Promise<void> {
     const now = Date.now()
     const sessionsToClean: string[] = []
     const IDLE_TIMEOUT = 3e5
@@ -650,6 +649,16 @@ export default class WebSocketHandler {
       const session = this.sessions.get(hash)
       if (!session) {
         continue
+      }
+
+      const storeSession = await this.sessionStore.get(hash)
+      if (storeSession) {
+        const storeIdleTime = now - storeSession.lastActivityAt
+        const effectiveTimeout = storeSession.downloadCompleted && !storeSession.isAborting ? IDLE_TIMEOUT : FAILED_TIMEOUT
+        if (storeIdleTime < effectiveTimeout) {
+          session.lastAccessTime = storeSession.lastActivityAt
+          continue
+        }
       }
 
       Log.info(`Cleaning up stale session: ${session.id} (idle: ${Math.round((now - session.lastAccessTime) / 1000)}s)`)
@@ -685,16 +694,19 @@ export default class WebSocketHandler {
    * Start periodic cleanup jobs
    */
   private startOrphanedDownloadsCleanup(): void {
+    const clusterID = process.env['CLUSTER_ID']
+    if (clusterID !== undefined && clusterID !== '0') {
+      return
+    }
+
     this.cleanupCron = new CronJob('*/5 * * * *', () => {
-      this.cleanupStaleSessions()
-      this.cleanOrphanedDownloads()
+      this.cleanupStaleSessions().then(() => this.cleanOrphanedDownloads())
     })
     this.cleanupCron.start()
 
     this.initialCleanupTimer = setTimeout(() => {
       this.initialCleanupTimer = undefined
-      this.cleanupStaleSessions()
-      this.cleanOrphanedDownloads()
+      this.cleanupStaleSessions().then(() => this.cleanOrphanedDownloads())
     }, 5000)
   }
 

@@ -3,6 +3,7 @@ import { existsSync } from "fs"
 import os from "os"
 
 import bundle from "./Server/Bundle"
+import Log from "./Server/Modules/Log"
 
 await bundle()
 
@@ -26,7 +27,7 @@ function spawnWorker(i: number): void {
 
   worker.once('exit', (code, signal) => {
     if (isShuttingDown) return
-    console.log(`Worker ${i} exited (code=${code}, signal=${signal}), restarting...`)
+    Log.warn(`Worker ${i} exited (code=${code}, signal=${signal}), restarting...`)
     setTimeout(() => {
       if (!isShuttingDown) spawnWorker(i)
     }, 1000)
@@ -41,7 +42,7 @@ async function shutdown(signal: string) {
   if (isShuttingDown) return
   isShuttingDown = true
 
-  console.log(`\nReceived ${signal}, shutting down cluster gracefully...`)
+  Log.info(`\nReceived ${signal}, shutting down cluster gracefully...`)
 
   const killPromises = buns.map((bun, i) => {
     return new Promise<void>((resolve) => {
@@ -51,7 +52,7 @@ async function shutdown(signal: string) {
       }
 
       const timeout = setTimeout(() => {
-        console.log(`Force killing worker ${i}...`)
+        Log.warn(`Force killing worker ${i}...`)
         bun.kill('SIGKILL')
         resolve()
       }, 10000)
@@ -66,7 +67,7 @@ async function shutdown(signal: string) {
   })
 
   await Promise.all(killPromises)
-  console.log('All workers stopped')
+  Log.success('All workers stopped')
   process.exit(0)
 }
 

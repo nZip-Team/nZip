@@ -8,7 +8,7 @@ services:
     environment:
       - HOST=${HOST}
       - PORT=${PORT}
-      - SESSION_STORE=${SESSION_STORE}
+      - SESSION_STORE=redis
       - REDIS_URL=redis://nzip-redis:6379
       - API_URL=${API_URL}
       - IMAGE_URL=${IMAGE_URL}

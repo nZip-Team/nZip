@@ -74,14 +74,10 @@ export default (): (() => Promise<void>) => {
       lookupQueryString: 'lang',
       lookupCookie: 'language',
       lookupFromHeaderKey: 'accept-language',
-      // Normalise any detected code (e.g. "zh-TW", "en-US") to the internal
-      // underscore format used by the language JSON files (e.g. "zh_tw").
       convertDetectedLanguage: (lang) => lang.toLowerCase().replace(/-/g, '_'),
       caches: ['cookie'],
       cookieOptions: {
         sameSite: 'Lax',
-        // Must be false: the client-side Home.js reads and writes this cookie
-        // via document.cookie to persist the user's language preference.
         httpOnly: false,
         secure: false,
         maxAge: 365 * 24 * 60 * 60,
@@ -180,16 +176,18 @@ export default (): (() => Promise<void>) => {
       const effectiveEnd = end === Infinity ? fileSize : Math.min(end + 1, fileSize)
 
       const responseHeaders: Record<string, string> = {
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
         'Content-Type': 'application/zip',
       }
 
       if (rangeHeader) {
         responseHeaders['Content-Range'] = `bytes ${start}-${effectiveEnd - 1}/${fileSize}`
         responseHeaders['Accept-Ranges'] = 'bytes'
+        responseHeaders['Content-Length'] = String(effectiveEnd - start)
         return new Response(file.slice(start, effectiveEnd), { status: 206, headers: responseHeaders })
       }
 
+      responseHeaders['Content-Length'] = String(fileSize)
       return new Response(file, { headers: responseHeaders })
     } catch {
       const match = fileName.match(/^\[(\d+)\](.*?)\.zip$/)

@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@icebrick/nhget": "^1.0.5",
-    "bun": "^1.3.9",
+    "bun": "^1.3.10",
     "cron": "^4.4.0",
-    "hono": "^4.12.1",
+    "hono": "^4.12.2",
     "yazl": "^3.3.1"
   },
   "devDependencies": {
