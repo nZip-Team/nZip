@@ -141,6 +141,9 @@ const (
 // downloadImages fetches all images in cfg.Images concurrently.
 // Returns true when all were downloaded (or already present) successfully.
 func downloadImages(ctx context.Context, cfg DownloadConfig) bool {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	total := len(cfg.Images)
 	if total == 0 {
 		return true
@@ -169,13 +172,14 @@ func downloadImages(ctx context.Context, cfg DownloadConfig) bool {
 	for range workers {
 		wg.Go(func() {
 			for url := range queue {
-				if ctx.Err() != nil {
+				if ctx.Err() != nil || failed.Load() {
 					return
 				}
 				if err := downloadFileWithRetry(ctx, client, url, cfg.DownloadDir); err != nil {
 					if ctx.Err() == nil {
 						logErr("Download %s: %v", url, err)
 						failed.Store(true)
+						cancel()
 					}
 					return
 				}

@@ -42,8 +42,11 @@ type SessionPatch struct {
 
 // SessionStore is a SQLite-backed, thread-safe session store.
 type SessionStore struct {
-	db *sql.DB
-	mu sync.Mutex // serialises writes; reads use their own short lock windows
+	db          *sql.DB
+	mu          sync.Mutex // serialises writes; reads use their own short lock windows
+	cleanupStop chan struct{}
+	cleanupDone chan struct{}
+	closeOnce   sync.Once
 }
 
 const schema = `
@@ -86,7 +89,11 @@ func NewSessionStore(dbPath string) (*SessionStore, error) {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 
-	s := &SessionStore{db: db}
+	s := &SessionStore{
+		db:          db,
+		cleanupStop: make(chan struct{}),
+		cleanupDone: make(chan struct{}),
+	}
 
 	_, _ = db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1`)
 	_, _ = db.Exec(`UPDATE sessions SET isAborting=0 WHERE isAborting=1 AND downloadCompleted=0`)
@@ -99,11 +106,16 @@ func NewSessionStore(dbPath string) (*SessionStore, error) {
 
 // Close shuts down the session store.
 func (s *SessionStore) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Release all active locks before close.
-	_, _ = s.db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1`)
-	_ = s.db.Close()
+	s.closeOnce.Do(func() {
+		close(s.cleanupStop)
+		<-s.cleanupDone
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		// Release all active locks before close.
+		_, _ = s.db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1`)
+		_ = s.db.Close()
+	})
 }
 
 // GetOrCreate returns an existing session for hash, or creates a new one.
@@ -355,17 +367,23 @@ func (s *SessionStore) ReleaseLock(hash, processID string) error {
 func (s *SessionStore) startCleanupJob() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		cutoff := time.Now().Add(-5 * time.Minute).UnixMilli()
-		s.mu.Lock()
-		res, err := s.db.Exec(`DELETE FROM sessions WHERE lastActivityAt<?`, cutoff)
-		s.mu.Unlock()
-		if err != nil {
-			logWarn("Session cleanup: %v", err)
-			continue
-		}
-		if n, _ := res.RowsAffected(); n > 0 {
-			logInfo("Session cleanup: removed %d expired session(s)", n)
+	defer close(s.cleanupDone)
+	for {
+		select {
+		case <-s.cleanupStop:
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-5 * time.Minute).UnixMilli()
+			s.mu.Lock()
+			res, err := s.db.Exec(`DELETE FROM sessions WHERE lastActivityAt<?`, cutoff)
+			s.mu.Unlock()
+			if err != nil {
+				logWarn("Session cleanup: %v", err)
+				continue
+			}
+			if n, _ := res.RowsAffected(); n > 0 {
+				logInfo("Session cleanup: removed %d expired session(s)", n)
+			}
 		}
 	}
 }

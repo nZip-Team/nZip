@@ -465,9 +465,13 @@ export default class WebSocketHandler {
     }
 
     session.lockRefreshTimer = setInterval(async () => {
-      const refreshed = await this.sessionStore.refreshLock(hash, this.processID)
-      if (!refreshed) {
-        Log.warn(`WS Lock Refresh Failed: ${id} - ${hash}`)
+      try {
+        const refreshed = await this.sessionStore.refreshLock(hash, this.processID)
+        if (!refreshed) {
+          Log.warn(`WS Lock Refresh Failed: ${id} - ${hash}`)
+        }
+      } catch (error) {
+        Log.warn(`WS Lock Refresh Error: ${id} - ${hash} - ${error}`)
       }
     }, 60000)
 
@@ -498,7 +502,7 @@ export default class WebSocketHandler {
 
       const filename = this.generateFilename(response.id, response.title)
       session.filename = filename
-      this.sessionStore.update(session.hash, { filename })
+      await this.sessionStore.update(session.hash, { filename })
 
       let retry = 0
       let success = false
@@ -539,7 +543,7 @@ export default class WebSocketHandler {
       if (success) {
         await this.flushDownloadStatus(session)
         session.downloadCompleted = true
-        this.sessionStore.update(session.hash, { downloadCompleted: true })
+        await this.sessionStore.update(session.hash, { downloadCompleted: true })
         Log.info(`WS Download End: ${response.id} - ${ip}`)
         await this.broadcastDownloadLink(session, filename)
         this.closeSessionClients(session)
@@ -567,10 +571,14 @@ export default class WebSocketHandler {
 
     session.isAborting = true
     this.flushDownloadStatus(session).catch((error) => Log.warn(`Failed to flush download status for ${session.hash}: ${error}`))
-    this.sessionStore.update(session.hash, { isAborting: true })
+    this.sessionStore.update(session.hash, { isAborting: true }).catch((error) => {
+      Log.warn(`Failed to persist abort status for ${session.hash}: ${error}`)
+    })
 
     // Release lock on failure
-    this.sessionStore.releaseLock(session.hash, this.processID)
+    this.sessionStore.releaseLock(session.hash, this.processID).catch((error) => {
+      Log.warn(`Failed to release lock during failure for ${session.hash}: ${error}`)
+    })
 
     this.broadcastToSession(session, buffer)
     this.closeSessionClients(session, closeCode, reason)
@@ -589,7 +597,9 @@ export default class WebSocketHandler {
           const downloadDir = path.join(this.downloadDir, session.hash)
           this.rmDir(downloadDir)
           this.sessions.delete(session.hash)
-          this.sessionStore.delete(session.hash)
+          this.sessionStore.delete(session.hash).catch((error) => {
+            Log.warn(`Failed to delete session during failure cleanup for ${session.hash}: ${error}`)
+          })
         })
       return
     }
@@ -607,7 +617,9 @@ export default class WebSocketHandler {
     const downloadDir = path.join(this.downloadDir, session.hash)
     this.rmDir(downloadDir)
     this.sessions.delete(session.hash)
-    this.sessionStore.delete(session.hash)
+    this.sessionStore.delete(session.hash).catch((error) => {
+      Log.warn(`Failed to delete session during failure cleanup for ${session.hash}: ${error}`)
+    })
   }
 
   /**
@@ -696,8 +708,10 @@ export default class WebSocketHandler {
 
       if (this.downloadManager.hasActiveDownload(session.hash) && !session.downloadCompleted) {
         session.isAborting = true
-        this.sessionStore.update(session.hash, { isAborting: true })
-        this.downloadManager.stopDownload(session.hash).catch((error) => {
+        await this.sessionStore.update(session.hash, { isAborting: true }).catch((error) => {
+          Log.warn(`Failed to persist abort status during stale cleanup for ${session.hash}: ${error}`)
+        })
+        await this.downloadManager.stopDownload(session.hash).catch((error) => {
           Log.warn(`Failed to stop downloader during stale cleanup for ${session.hash}: ${error}`)
         })
       }
@@ -716,8 +730,12 @@ export default class WebSocketHandler {
       const downloadDir = path.join(this.downloadDir, session.hash)
       this.rmDir(downloadDir)
       this.sessions.delete(hash)
-      this.sessionStore.releaseLock(session.hash, this.processID)
-      this.sessionStore.delete(session.hash)
+      await this.sessionStore.releaseLock(session.hash, this.processID).catch((error) => {
+        Log.warn(`Failed to release lock during stale cleanup for ${session.hash}: ${error}`)
+      })
+      await this.sessionStore.delete(session.hash).catch((error) => {
+        Log.warn(`Failed to delete session during stale cleanup for ${session.hash}: ${error}`)
+      })
     }
   }
 
