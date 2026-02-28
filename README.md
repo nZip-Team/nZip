@@ -39,6 +39,8 @@ Then, copy the [compose.yml](compose.yml) file into the `nzip` directory.
 
 Copy the [.env.example](.env.example) file into the `nzip` directory and rename it to `.env`, then open it in your favorite text editor and configure the environment variables.
 
+To run in cluster mode, uncomment the `command` line in [compose.yml](compose.yml) and set the worker count.
+
 Then, run the following command to run the Docker container:
 
 ```bash
@@ -59,12 +61,26 @@ Follow the instructions in the [Development](#development) section to run the pr
 
 ## Development
 
-nZip is built using [TypeScript](https://www.typescriptlang.org/) and [Bun](https://bun.sh/). To run the project locally, clone the repository and execute the following commands after configuring the `.env` file:
+nZip is built using [TypeScript](https://www.typescriptlang.org/), [Bun](https://bun.sh/), and a Go core process.
+
+### Requirements
+
+- [Bun](https://bun.sh/)
+- [Go](https://go.dev/)
+
+### Run locally
+
+Clone the repository and execute the following commands after configuring the `.env` file:
 
 ```bash
 bun install
 bun start
 ```
+
+### Optional scripts
+
+- `bun run dev:docker` - Build and run the development Docker stack
+- `bun run build:core` - Build the Go core binary manually
 
 ## License
 
