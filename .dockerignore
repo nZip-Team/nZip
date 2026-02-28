@@ -1,7 +1,12 @@
 node_modules/
 package-lock.json
+bun.lock
 bun.lockb
+
+Core/nzip-core
+Core/*.exe
 
 Server/Cache/
 
 .env
+sessions.db*

@@ -2,6 +2,7 @@ services:
   nzip-server:
     container_name: nzip-server
     image: ghcr.io/nzip-team/nzip:latest
+    # command: ['start.sh', '4'] # Uncomment to run in cluster mode
     ports:
       - '3000:3000'
     environment:
@@ -12,5 +13,4 @@ services:
       - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
       - ANALYTICS=${ANALYTICS}
       - NODE_ENV=${NODE_ENV}
-    network_mode: bridge
     restart: unless-stopped

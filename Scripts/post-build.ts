@@ -4,4 +4,7 @@ await $`cp -r App dist`
 await $`rm -rf dist/App/Pages`
 await $`rm dist/App/Images/icon.png dist/App/Images/icon.svg dist/App/Images/logo.*`
 
-await $`bun ./Scripts/bundle-pages.ts`
+if (Bun.which('go')) {
+  await $`bun run build:core`
+  await $`cp Core/nzip-core dist`
+}

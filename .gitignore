@@ -1,11 +1,16 @@
 node_modules/
 package-lock.json
 bun.lock
+bun.lockb
+
+Core/nzip-core
+Core/*.exe
 
 App/Scripts/
 Server/Cache/
 dist/
 
 .env
+sessions.db*
 
 .DS_Store

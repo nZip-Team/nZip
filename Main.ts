@@ -4,42 +4,54 @@ import path from 'path'
 import Server from './Server/Server'
 import bundle from './Server/Bundle'
 
-import { version } from './package.json'
+const development = process.env['NODE_ENV'] === 'development'
 
-const httpHost = process.env['HOST'] || 'http://localhost'
-const httpPort = parseInt(process.env['PORT'] || '3000')
-const apiHost =
-  process.env['API_URL'] ??
-  (() => {
-    throw new Error('API_URL is not defined')
-  })()
-const imageHost =
-  process.env['IMAGE_URL'] ??
-  (() => {
-    throw new Error('IMAGE_URL is not defined')
-  })()
-const concurrentImageDownloads = parseInt(process.env['CONCURRENT_IMAGE_DOWNLOADS'] || '16')
-const analytics = process.env['ANALYTICS'] || ''
-const development = process.env.NODE_ENV === 'development'
+let serverCleanup: (() => Promise<void>) | null = null
+let watcherTimeout: NodeJS.Timeout | null = null
+let watcher: fs.FSWatcher | null = null
+let isShuttingDown = false
 
-const downloadDir = path.join(process.cwd(), fs.existsSync(path.join(process.cwd(), 'Server')) ? 'Server' : '', 'Cache', 'Downloads')
-fs.rmSync(downloadDir, { recursive: true, force: true })
-fs.mkdirSync(downloadDir, { recursive: true })
+async function shutdown(): Promise<void> {
+  if (isShuttingDown) return
+  isShuttingDown = true
+  console.log()
+
+  if (watcherTimeout) {
+    clearTimeout(watcherTimeout)
+    watcherTimeout = null
+  }
+  
+  if (watcher) {
+    watcher.close()
+    watcher = null
+  }
+  
+  if (serverCleanup) {
+    await serverCleanup()
+  }
+  
+  process.exit(0)
+}
+
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)
+process.on('SIGHUP', shutdown)
 
 async function start(): Promise<void> {
-  await bundle()
+  if (!process.env['SKIP_BUNDLE']) {
+    await bundle()
+  }
 
-  Server(httpHost, httpPort, apiHost, imageHost, downloadDir, concurrentImageDownloads, analytics, version)
+  serverCleanup = await Server()
 
   if (development) {
     if (!fs.existsSync(path.join(process.cwd(), 'Server', 'Scripts'))) return
-    let bundleTimeout: NodeJS.Timeout | null = null
 
-    fs.watch(path.join(process.cwd(), 'Server', 'Scripts'), { recursive: true }, () => {
-      if (bundleTimeout) {
-        clearTimeout(bundleTimeout)
+    watcher = fs.watch(path.join(process.cwd(), 'Server', 'Scripts'), { recursive: true }, () => {
+      if (watcherTimeout) {
+        clearTimeout(watcherTimeout)
       }
-      bundleTimeout = setTimeout(() => {
+      watcherTimeout = setTimeout(() => {
         bundle().catch(console.error)
       }, 3000)
     })

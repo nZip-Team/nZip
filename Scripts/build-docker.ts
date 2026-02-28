@@ -1,7 +1,7 @@
 import { $ } from 'bun'
 import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
-import Log from '@icebrick/log'
+import Log from '../Server/Modules/Log'
 
 async function getPackageVersion(): Promise<string> {
   const packageJsonPath = path.join(process.cwd(), 'package.json')

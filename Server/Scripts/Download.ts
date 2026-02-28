@@ -31,7 +31,19 @@ updateDynamicMinHeight()
 window.addEventListener('load', updateDynamicMinHeight)
 window.addEventListener('resize', updateDynamicMinHeight)
 
-type States = 'loading' | 'success'
+type States = 'loading' | 'success' | 'error'
+
+function formatElapsedTime(startTime: number): string {
+  const elapsedSeconds = (Date.now() - startTime) / 1000
+
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds.toFixed(2)} sec`
+  }
+
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const seconds = Math.floor(elapsedSeconds % 60)
+  return `${minutes} min ${seconds} sec`
+}
 
 function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, state: States): void {
   if (state === 'loading') {
@@ -42,6 +54,10 @@ function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, stat
     Container.style.opacity = '1'
     Status.style.animation = ''
     Status.style.backgroundColor = 'var(--text_color)'
+  } else if (state === 'error') {
+    Container.style.opacity = '1'
+    Status.style.animation = ''
+    Status.style.backgroundColor = '#ff4444'
   }
 }
 
@@ -60,6 +76,8 @@ const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 const socket = new WebSocket(window.location.href.replace(/\/g\//, '/ws/g/'))
 
 socket.addEventListener('open', () => {
+  const startTime = Date.now()
+
   step_connect_status.style.animation = ''
   step_connect_status.style.width = '0.75rem'
   step_connect_status.style.backgroundColor = 'var(--text_color)'
@@ -84,6 +102,7 @@ socket.addEventListener('open', () => {
      */
 
     if (buffer[0] === 0x00) {
+      // Download progress
       if (!step_download) {
         statusAnimation(step_download_container, step_download_status, 'loading')
         step_download = true
@@ -95,7 +114,19 @@ socket.addEventListener('open', () => {
       progress_text.innerHTML = `${Math.round(10 + (80 / total) * completed)}% (${completed} / ${total})`
       progress_bar.style.width = `${10 + (80 / total) * completed}%`
     } else if (buffer[0] === 0x01) {
+      // Download error
+      if (step_download) {
+        statusAnimation(step_download_container, step_download_status, 'error')
+        step_download = false
+      }
+
+      const errorMessage = new TextDecoder().decode(buffer.slice(1))
+      progress_text.innerHTML = errorMessage || 'Download failed'
+      progress_text.style.color = '#ff4444'
+      
+      socket.close()
     } else if (buffer[0] === 0x10) {
+      // Pack progress
       if (step_download) {
         statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
@@ -106,13 +137,26 @@ socket.addEventListener('open', () => {
         step_pack = true
       }
 
-      const completed = view.getUint16(1)
-      const total = view.getUint16(3)
-
-      progress_text.innerHTML = `${Math.round(90 + (10 / total) * completed)}%` // Not implemented: (${completed} / ${total})
-      progress_bar.style.width = `${90 + (10 / total) * completed}%`
+      progress_text.innerHTML = '90%'
+      progress_bar.style.width = '90%'
     } else if (buffer[0] === 0x11) {
+      // Pack error
+      if (step_download) {
+        statusAnimation(step_download_container, step_download_status, 'success')
+        step_download = false
+      }
+      if (step_pack) {
+        statusAnimation(step_pack_container, step_pack_status, 'error')
+        step_pack = false
+      }
+
+      const errorMessage = new TextDecoder().decode(buffer.slice(1))
+      progress_text.innerHTML = errorMessage || 'Pack failed'
+      progress_text.style.color = '#ff4444'
+      
+      socket.close()
     } else if (buffer[0] === 0x20) {
+      // Download link
       if (step_download) {
         statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
@@ -125,8 +169,9 @@ socket.addEventListener('open', () => {
       statusAnimation(step_finish_container, step_finish_status, 'success')
 
       const url = new TextDecoder().decode(buffer.slice(1))
+      const elapsedText = formatElapsedTime(startTime)
 
-      progress_text.innerHTML = '100%'
+      progress_text.innerHTML = `100% (${elapsedText})`
       progress_result.href = url
       progress_result.style.opacity = '1'
       progress_bar.style.width = '100%'

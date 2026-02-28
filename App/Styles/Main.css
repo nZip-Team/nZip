@@ -3,6 +3,10 @@
   scroll-behavior: smooth;
 }
 
+:lang(zh) * {
+  font-family: "SFMono-Regular", "Noto Sans Mono", Consolas, Menlo, "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", monospace;
+}
+
 :root {
   --background_color: black;
   --text_color: white;

@@ -4,6 +4,7 @@ services:
   nzip-server:
     container_name: nzip-server
     image: nzip:dev
+    # command: ['start.sh', '4'] # Uncomment to run in cluster mode
     build: .
     ports:
       - '3000:3000'
@@ -15,5 +16,4 @@ services:
       - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
       - ANALYTICS=${ANALYTICS}
       - NODE_ENV=${NODE_ENV}
-    network_mode: bridge
     restart: unless-stopped
