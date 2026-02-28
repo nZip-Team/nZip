@@ -8,6 +8,7 @@
     "prebuild": "bun Scripts/pre-build.ts",
     "build": "bun Scripts/build.ts",
     "postbuild": "bun Scripts/post-build.ts",
+    "build:core": "cd Core && go build -ldflags=\"-s -w\" -o nzip-core .",
     "build:docker": "bun Scripts/build-docker.ts",
     "dev:docker": "docker compose -f compose.dev.yml up --build",
     "prettier": "prettier --write ."

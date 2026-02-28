@@ -8,20 +8,9 @@ services:
     environment:
       - HOST=${HOST}
       - PORT=${PORT}
-      - SESSION_STORE=redis
-      - REDIS_URL=redis://nzip-redis:6379
       - API_URL=${API_URL}
       - IMAGE_URL=${IMAGE_URL}
       - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
       - ANALYTICS=${ANALYTICS}
       - NODE_ENV=${NODE_ENV}
-    restart: unless-stopped
-    depends_on:
-      - nzip-redis
-  nzip-redis:
-    container_name: nzip-redis
-    image: redis:8-alpine
-    expose:
-      - '6379'
-    command: ["redis-server", "--save", "900", "1", "--loglevel", "warning"]
     restart: unless-stopped

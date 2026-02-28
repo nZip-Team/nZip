@@ -4,13 +4,13 @@ import os from 'os'
 import { CronJob } from 'cron'
 
 import nhget, { type GalleryData } from '@icebrick/nhget'
-import DownloadManager, { type DownloadResult } from './Modules/DownloadManager'
+import { type DownloadResult, type IDownloadManager } from './Modules/DownloadManager'
 import Log from './Modules/Log'
+import type { ISessionStore } from './Modules/Core'
 
 import Config from '../Config'
 
 import { getIP } from './Server'
-import type { ISessionStore } from './Session'
 
 import type { Context } from 'hono'
 import type { BlankEnv, BlankInput } from 'hono/types'
@@ -33,12 +33,14 @@ interface DownloadSession {
   lastAccessTime: number
   downloadPromise?: Promise<void>
   lockRefreshTimer?: ReturnType<typeof setInterval>
+  lastDownloadPersistAt: number
 }
 
 export default class WebSocketHandler {
+  private static readonly DOWNLOAD_STATUS_PERSIST_INTERVAL_MS = 1000
   private nh: nhget
   private imageHost: string
-  private downloadManager: DownloadManager
+  private downloadManager: IDownloadManager
   private sessions: Map<string, DownloadSession>
   private sessionStore: ISessionStore
   private concurrentImageDownloads: number
@@ -47,11 +49,11 @@ export default class WebSocketHandler {
   private cleanupCron?: CronJob
   private initialCleanupTimer?: ReturnType<typeof setTimeout>
 
-  constructor(nh: nhget, downloadDir:string, sessionStore: ISessionStore) {
+  constructor(nh: nhget, downloadDir: string, sessionStore: ISessionStore, downloadManager: IDownloadManager) {
     this.nh = nh
     this.imageHost = Config.imageHost
     this.concurrentImageDownloads = Config.concurrentImageDownloads
-    this.downloadManager = new DownloadManager()
+    this.downloadManager = downloadManager
     this.sessions = new Map()
     this.sessionStore = sessionStore
 
@@ -298,7 +300,8 @@ export default class WebSocketHandler {
       lastLinkBuffer,
       downloadLink: sharedSession.downloadLink,
       isAborting: sharedSession.isAborting,
-      lastAccessTime: Date.now()
+      lastAccessTime: Date.now(),
+      lastDownloadPersistAt: 0
     }
 
     this.sessions.set(hash, session)
@@ -322,6 +325,29 @@ export default class WebSocketHandler {
     session.lastLinkBuffer = undefined
     session.lastDownloadBuffer = undefined
     session.lastPackBuffer = undefined
+    session.lastDownloadPersistAt = 0
+  }
+
+  private persistDownloadStatus(session: DownloadSession): void {
+    if (!session.lastDownloadBuffer) {
+      return
+    }
+
+    session.lastDownloadPersistAt = Date.now()
+    this.sessionStore.update(session.hash, {
+      lastDownloadStatus: session.lastDownloadBuffer.toString('base64')
+    }).catch((error) => Log.warn(`Failed to persist download status for ${session.hash}: ${error}`))
+  }
+
+  private async flushDownloadStatus(session: DownloadSession): Promise<void> {
+    if (!session.lastDownloadBuffer) {
+      return
+    }
+
+    session.lastDownloadPersistAt = Date.now()
+    await this.sessionStore.update(session.hash, {
+      lastDownloadStatus: session.lastDownloadBuffer.toString('base64')
+    })
   }
 
   private async sendSnapshotToClient(session: DownloadSession, ws: ServerWebSocket): Promise<void> {
@@ -347,10 +373,12 @@ export default class WebSocketHandler {
   private broadcastToSession(session: DownloadSession, buffer: Buffer, cache?: StatusCacheKey): void {
     if (cache === 'download') {
       session.lastDownloadBuffer = buffer
-      this.sessionStore.update(session.hash, {
-        lastDownloadStatus: buffer.toString('base64')
-      }).catch((error) => Log.warn(`Failed to persist download status for ${session.hash}: ${error}`))
+      const shouldPersist = Date.now() - session.lastDownloadPersistAt >= WebSocketHandler.DOWNLOAD_STATUS_PERSIST_INTERVAL_MS
+      if (shouldPersist) {
+        this.persistDownloadStatus(session)
+      }
     } else if (cache === 'pack') {
+      this.flushDownloadStatus(session).catch((error) => Log.warn(`Failed to flush download status for ${session.hash}: ${error}`))
       session.lastPackBuffer = buffer
       this.sessionStore.update(session.hash, {
         lastPackStatus: buffer.toString('base64')
@@ -406,6 +434,7 @@ export default class WebSocketHandler {
     session.lastDownloadBuffer = undefined
     session.lastPackBuffer = undefined
     session.lastLinkBuffer = undefined
+    session.lastDownloadPersistAt = 0
   }
 
   private closeSessionClients(session: DownloadSession, code = 1000, reason?: string): void {
@@ -508,6 +537,7 @@ export default class WebSocketHandler {
       }
 
       if (success) {
+        await this.flushDownloadStatus(session)
         session.downloadCompleted = true
         this.sessionStore.update(session.hash, { downloadCompleted: true })
         Log.info(`WS Download End: ${response.id} - ${ip}`)
@@ -536,6 +566,7 @@ export default class WebSocketHandler {
     }
 
     session.isAborting = true
+    this.flushDownloadStatus(session).catch((error) => Log.warn(`Failed to flush download status for ${session.hash}: ${error}`))
     this.sessionStore.update(session.hash, { isAborting: true })
 
     // Release lock on failure

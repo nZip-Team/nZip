@@ -101,12 +101,23 @@ class Pages {
    * @param page Page name to reload
    */
   private loadPageDev(page: PageName): void {
-    const filePath = path.join(process.cwd(), this.filePath, 'Pages', page)
+    const filePath = this.resolveDevPagePath(page)
+
+    if (!filePath) {
+      if (this.cachedPages[page]) {
+        this.debug(`Custom ${page} page not found, using cached version`)
+      } else {
+        this.cachedPages[page] = PageModules[page]
+        Log.info(`Using bundled version of ${page} page`)
+      }
+      return
+    }
+
     try {
       // Bust the require cache for all plausible extensions so the file is
       // re-evaluated fresh on the next require() call.
       for (const ext of ['.tsx', '.ts', '.jsx', '.js', '']) {
-        const key = filePath + ext
+        const key = filePath.endsWith(ext) ? filePath : filePath + ext
         if (require.cache[key]) delete require.cache[key]
       }
       const rawmodule = require(filePath)
@@ -123,6 +134,17 @@ class Pages {
         Log.info(`Using bundled version of ${page} page`)
       }
     }
+  }
+
+  private resolveDevPagePath(page: PageName): string | null {
+    const basePath = path.join(process.cwd(), this.filePath, 'Pages', page)
+    for (const ext of ['.tsx', '.ts', '.jsx', '.js']) {
+      const filePath = basePath + ext
+      if (existsSync(filePath)) {
+        return filePath
+      }
+    }
+    return null
   }
 
   /**

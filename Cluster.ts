@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from "child_process"
 import { existsSync } from "fs"
-import os from "os"
 
 import bundle from "./Server/Bundle"
 import Log from "./Server/Modules/Log"
@@ -9,7 +8,7 @@ await bundle()
 
 const mainFile = existsSync("./Main.js") ? "./Main.js" : "./Main.ts"
 
-const cpus = (process.argv[2] && parseInt(process.argv[2])) || os.cpus().length || 2
+const cpus = (process.argv[2] && parseInt(process.argv[2])) || 2
 const buns: ChildProcess[] = new Array(cpus)
 let isShuttingDown = false
 

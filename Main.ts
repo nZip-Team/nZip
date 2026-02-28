@@ -42,7 +42,7 @@ async function start(): Promise<void> {
     await bundle()
   }
 
-  serverCleanup = Server()
+  serverCleanup = await Server()
 
   if (development) {
     if (!fs.existsSync(path.join(process.cwd(), 'Server', 'Scripts'))) return

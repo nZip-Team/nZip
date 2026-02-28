@@ -34,11 +34,22 @@ export type DownloadResult =
   | { success: false; errorCode: 0x01 | 0x11 }
 
 /**
+ * Common interface shared by DownloadManager and CoreDownloadManager.
+ */
+export interface IDownloadManager {
+  run(config: DownloadConfig): Promise<DownloadResult>
+  stopDownload(hash: string): Promise<void>
+  hasActiveDownload(hash: string): boolean
+  stopAll(): void
+  cleanTempFiles(downloadDir: string, filename: string): void
+}
+
+/**
  * Manages the two-phase process of downloading gallery images and archiving
  * them into a zip file. Tracks in-flight FileDownloader instances so they
  * can be cleanly stopped from outside (e.g. on abort or server shutdown).
  */
-export default class DownloadManager {
+export default class DownloadManager implements IDownloadManager {
   private activeDownloads = new Map<string, FileDownloader>()
 
   /**

@@ -15,8 +15,7 @@ import Log from './Modules/Log'
 import Pages, { type PageName } from './Modules/Pages'
 import WebSocketHandler from './WebSocket'
 import Languages from './Modules/Language'
-
-import { createSessionStore } from './Session'
+import { Core } from './Modules/Core'
 
 type AppEnv = { Variables: { language: string } }
 type AppContext = Context<AppEnv>
@@ -46,18 +45,23 @@ if (!fs.existsSync(downloadDir)) {
 /**
  * Start the server
  */
-export default (): (() => Promise<void>) => {
+export default async (): Promise<() => Promise<void>> => {
   const nh = new nhget({
     endpoint: `${Config.apiHost}/api/gallery/`,
     imageEndpoint: `${Config.imageHost}/galleries/`
   })
 
-  const storeType = process.env['SESSION_STORE'] || 'sqlite'
-  const sessionStore = createSessionStore(storeType)
+  const core = new Core()
+  await core.start()
+  const sessionStore = core.sessionStore
+  Log.info('Session store: core (nzip-core)')
 
-  Log.info(`Session store: ${storeType}`)
-
-  const WSHandler = new WebSocketHandler(nh, downloadDir, sessionStore)
+  const WSHandler = new WebSocketHandler(
+    nh,
+    downloadDir,
+    sessionStore,
+    core.downloadManager
+  )
 
   analytics = Config.analytics || null
 
@@ -176,18 +180,18 @@ export default (): (() => Promise<void>) => {
       const effectiveEnd = end === Infinity ? fileSize : Math.min(end + 1, fileSize)
 
       const responseHeaders: Record<string, string> = {
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-        'Content-Type': 'application/zip',
+        'content-disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        'content-type': 'application/zip',
+        'accept-ranges': 'bytes',
       }
 
       if (rangeHeader) {
-        responseHeaders['Content-Range'] = `bytes ${start}-${effectiveEnd - 1}/${fileSize}`
-        responseHeaders['Accept-Ranges'] = 'bytes'
-        responseHeaders['Content-Length'] = String(effectiveEnd - start)
+        responseHeaders['content-range'] = `bytes ${start}-${effectiveEnd - 1}/${fileSize}`
+        responseHeaders['content-length'] = String(effectiveEnd - start)
         return new Response(file.slice(start, effectiveEnd), { status: 206, headers: responseHeaders })
       }
 
-      responseHeaders['Content-Length'] = String(fileSize)
+      responseHeaders['content-length'] = String(fileSize)
       return new Response(file, { headers: responseHeaders })
     } catch {
       const match = fileName.match(/^\[(\d+)\](.*?)\.zip$/)
@@ -204,6 +208,34 @@ export default (): (() => Promise<void>) => {
       return Page(c, 'Error', {
         error: errorMessage
       })
+    }
+  })
+
+  app.on('HEAD', '/download/:hash/:file', async (c) => {
+    const hash = c.req.param('hash')
+    const fileName = decodeURIComponent(c.req.param('file'))
+
+    try {
+      const filePath = sanitizePath(hash, downloadDir)
+      const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
+
+      if (!filePath || !fileLoc) throw new Error('Invalid path')
+      if (!fileName.endsWith('.zip')) throw new Error('Invalid File')
+
+      const file = Bun.file(fileLoc)
+      if (!(await file.exists())) throw new Error('File does not exist')
+
+      return new Response(null, {
+        status: 200,
+        headers: {
+          'content-disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+          'content-type': 'application/zip',
+          'accept-ranges': 'bytes',
+          'content-length': String(file.size),
+        },
+      })
+    } catch {
+      return new Response(null, { status: 404 })
     }
   })
 
@@ -275,6 +307,8 @@ export default (): (() => Promise<void>) => {
 
   return async () => {
     Log.info('Shutting down server...')
+
+    core.prepareForShutdown()
     
     try {
       server.stop(true)
@@ -288,6 +322,13 @@ export default (): (() => Promise<void>) => {
       Log.info('WebSocket handler closed')
     } catch (error) {
       Log.error(`Error closing WebSocket handler: ${error}`)
+    }
+
+    try {
+      await core.close()
+      Log.info('Core closed')
+    } catch (error) {
+      Log.error(`Error closing core: ${error}`)
     }
 
     try {

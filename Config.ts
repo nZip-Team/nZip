@@ -18,7 +18,6 @@ export default {
     })(),
 
   concurrentImageDownloads: parseInt(process.env['CONCURRENT_IMAGE_DOWNLOADS'] || '16', 10),
-  sessionStoreType: process.env['SESSION_STORE'] || 'sqlite',
   analytics: process.env['ANALYTICS'] || '',
 
   development: process.env.NODE_ENV === 'development'

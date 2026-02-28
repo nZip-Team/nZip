@@ -33,6 +33,18 @@ window.addEventListener('resize', updateDynamicMinHeight)
 
 type States = 'loading' | 'success' | 'error'
 
+function formatElapsedTime(startTime: number): string {
+  const elapsedSeconds = (Date.now() - startTime) / 1000
+
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds.toFixed(2)} sec`
+  }
+
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const seconds = Math.floor(elapsedSeconds % 60)
+  return `${minutes} min ${seconds} sec`
+}
+
 function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, state: States): void {
   if (state === 'loading') {
     Container.style.opacity = '1'
@@ -64,6 +76,8 @@ const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 const socket = new WebSocket(window.location.href.replace(/\/g\//, '/ws/g/'))
 
 socket.addEventListener('open', () => {
+  const startTime = Date.now()
+
   step_connect_status.style.animation = ''
   step_connect_status.style.width = '0.75rem'
   step_connect_status.style.backgroundColor = 'var(--text_color)'
@@ -155,8 +169,9 @@ socket.addEventListener('open', () => {
       statusAnimation(step_finish_container, step_finish_status, 'success')
 
       const url = new TextDecoder().decode(buffer.slice(1))
+      const elapsedText = formatElapsedTime(startTime)
 
-      progress_text.innerHTML = '100%'
+      progress_text.innerHTML = `100% (${elapsedText})`
       progress_result.href = url
       progress_result.style.opacity = '1'
       progress_bar.style.width = '100%'
