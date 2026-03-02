@@ -15,6 +15,7 @@ import Log from './Modules/Log'
 import Pages, { type PageName } from './Modules/Pages'
 import WebSocketHandler from './WebSocket'
 import Languages from './Modules/Language'
+import Scripts from './Modules/Scripts'
 import { Core } from './Modules/Core'
 
 type AppEnv = { Variables: { language: string } }
@@ -54,7 +55,6 @@ export default async (): Promise<() => Promise<void>> => {
   const core = new Core()
   await core.start()
   const sessionStore = core.sessionStore
-  Log.info('Session store: core (nzip-core)')
 
   const WSHandler = new WebSocketHandler(
     nh,
@@ -350,6 +350,12 @@ export default async (): Promise<() => Promise<void>> => {
       Log.error(`Error closing page watcher: ${error}`)
     }
 
+    try {
+      Scripts.shutdown()
+    } catch (error) {
+      Log.error(`Error closing script watcher: ${error}`)
+    }
+
     Log.success('Shutdown complete')
   }
 }
@@ -505,7 +511,8 @@ function RenderPage(c: AppContext, pagename: PageName, args?: null | Record<stri
     const lang = getLang(c)
     const Args = {
       ...args,
-      t: (key: string) => Languages.translate(lang, pagename, key)
+      t: (key: string) => Languages.translate(lang, pagename, key),
+      script: (name: string) => Scripts.getScript(name)
     }
 
     return Pages.page(pagename, Args).render({ analytics, lang })

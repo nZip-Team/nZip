@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -238,6 +239,17 @@ func (e *httpStatusError) Error() string {
 	return fmt.Sprintf("HTTP %d for %s", e.Code, e.URL)
 }
 
+func userAgent() string {
+	version := strings.TrimSpace(os.Getenv("NZIP_VERSION"))
+	if version == "" {
+		version = strings.TrimSpace(Version)
+	}
+	if version == "" {
+		version = "dev"
+	}
+	return fmt.Sprintf("nZip/%s (+https://github.com/nZip-Team/nZip)", version)
+}
+
 // isTemporaryError reports whether err is worth retrying.
 func isTemporaryError(err error) bool {
 	if err == nil {
@@ -277,7 +289,7 @@ func fetchFile(ctx context.Context, client *http.Client, rawURL, dest string) er
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "nZip/1.1 (+https://github.com/nZip-Team/nZip)")
+	req.Header.Set("User-Agent", userAgent())
 
 	resp, err := client.Do(req)
 	if err != nil {

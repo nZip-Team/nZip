@@ -4,9 +4,8 @@ import os from 'os'
 import { CronJob } from 'cron'
 
 import nhget, { type GalleryData } from '@icebrick/nhget'
-import { type DownloadResult, type IDownloadManager } from './Modules/DownloadManager'
 import Log from './Modules/Log'
-import type { ISessionStore } from './Modules/Core'
+import type { DownloadResult, IDownloadManager, ISessionStore } from './Modules/Core'
 
 import Config from '../Config'
 

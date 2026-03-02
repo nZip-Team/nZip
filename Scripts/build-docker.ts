@@ -1,5 +1,5 @@
 import { $ } from 'bun'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import path from 'path'
 import Log from '../Server/Modules/Log'
 
@@ -9,18 +9,19 @@ async function getPackageVersion(): Promise<string> {
   return packageJson.version
 }
 
-async function updateDockerfile(version: string): Promise<void> {
-  const dockerfilePath = path.join(process.cwd(), 'Dockerfile')
-  const dockerfile = await readFile(dockerfilePath, 'utf-8')
-  const created = new Date().toISOString()
-  const updatedDockerfile = dockerfile
-    .replace(/LABEL org\.opencontainers\.image\.version=".*"/, `LABEL org.opencontainers.image.version="${version}"`)
-    .replace(/LABEL org\.opencontainers\.image\.created=".*"/, `LABEL org.opencontainers.image.created="${created}"`)
-  await writeFile(dockerfilePath, updatedDockerfile)
+async function getGitRevision(): Promise<string> {
+  try {
+    const result = await $`git rev-parse --short HEAD`.text()
+    return result.trim() || 'unknown'
+  } catch {
+    return 'unknown'
+  }
 }
 
 async function buildDockerImage(version: string): Promise<void> {
   const imageName = `ghcr.io/nzip-team/nzip:${version}`
+  const created = new Date().toISOString()
+  const revision = await getGitRevision()
 
   const versionParts = version.split('-')
   const baseVersion = versionParts[0]
@@ -40,14 +41,11 @@ async function buildDockerImage(version: string): Promise<void> {
 
   console.log(tags)
 
-  Log.info('Updating Dockerfile...')
-  await updateDockerfile(version)
-
   const allTags = Array.from(new Set([imageName, ...tags]))
 
   Log.info('Building and pushing multi-arch Docker images (linux/amd64, linux/arm64)...')
   const tagArgs = allTags.flatMap((tag) => ['-t', tag])
-  await $`docker buildx build --platform linux/amd64,linux/arm64 ${tagArgs} --push .`
+  await $`docker buildx build --platform linux/amd64,linux/arm64 ${tagArgs} --build-arg VERSION=${version} --build-arg REVISION=${revision} --build-arg CREATED=${created} --push .`
 
   Log.success('Docker image build and push complete.')
 }

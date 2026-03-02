@@ -5,8 +5,32 @@
 import path from 'path'
 import fs from 'fs'
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { DownloadConfig, DownloadResult, IDownloadManager } from './DownloadManager'
 import Log from './Log'
+import Config from '../../Config'
+
+export interface DownloadConfig {
+  hash: string
+  images: string[]
+  filename: string
+  downloadDir: string
+  concurrentDownloads: number
+  debug?: boolean
+  onProgress: (completed: number, total: number) => void
+  onPackStart: () => void
+  isAborting: () => boolean
+}
+
+export type DownloadResult =
+  | { success: true }
+  | { success: false; errorCode: 0x01 | 0x11 }
+
+export interface IDownloadManager {
+  run(config: DownloadConfig): Promise<DownloadResult>
+  stopDownload(hash: string): Promise<void>
+  hasActiveDownload(hash: string): boolean
+  stopAll(): void
+  cleanTempFiles(downloadDir: string, filename: string): void
+}
 
 export interface SharedSessionData {
   id: string
@@ -137,6 +161,7 @@ export class Core {
           env: {
             ...process.env,
             DB_PATH: this.dbPath,
+            NZIP_VERSION: Config.version,
           },
         })
       : spawn(this.binaryPath, [], {
@@ -144,6 +169,7 @@ export class Core {
           env: {
             ...process.env,
             DB_PATH: this.dbPath,
+            NZIP_VERSION: Config.version,
           },
         })
 

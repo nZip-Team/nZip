@@ -48,6 +48,8 @@ import (
 	"time"
 )
 
+var Version = "dev"
+
 // Command is the inbound JSON envelope.
 type Command struct {
 	ReqID string `json:"reqId"`

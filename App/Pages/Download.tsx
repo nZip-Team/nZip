@@ -8,7 +8,7 @@
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { id: string, title: string, cover: string, t: (key: string) => string }) => {
+export default (args: { id: string, title: string, cover: string, t: (key: string) => string, script: (name: string) => string }) => {
   const t = args.t
 
   return {
@@ -54,7 +54,7 @@ export default (args: { id: string, title: string, cover: string, t: (key: strin
             </div>
           </div>
         </div>
-        <script type="module" src="/Scripts/Download.js"></script>
+        <script type="module" src={args.script('Download')}></script>
       </body>
     )
   }

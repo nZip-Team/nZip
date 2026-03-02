@@ -1,10 +1,10 @@
 import { spawn, type ChildProcess } from "child_process"
 import { existsSync } from "fs"
 
-import bundle from "./Server/Bundle"
 import Log from "./Server/Modules/Log"
+import Scripts from "./Server/Modules/Scripts"
 
-await bundle()
+await Scripts.bundle()
 
 const mainFile = existsSync("./Main.js") ? "./Main.js" : "./Main.ts"
 

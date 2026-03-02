@@ -6,7 +6,7 @@
  * @returns Object containing the page title, description, keywords and content
  */
 // prettier-ignore
-export default (args: { version: string; t: (key: string) => string }) => {
+export default (args: { version: string; t: (key: string) => string; script: (name: string) => string }) => {
   const t = args.t
 
   return {
@@ -48,7 +48,7 @@ export default (args: { version: string; t: (key: string) => string }) => {
           </div>
           <a className="text" href="https://github.com/nZip-Team/nZip" target="_blank" style={{ flexShrink: '0', fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>{t('GitHub')}</a>
         </div>
-        <script src="/Scripts/Home.js"></script>
+        <script src={args.script('Home')}></script>
       </body>
     )
   }

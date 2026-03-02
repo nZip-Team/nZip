@@ -1,10 +1,16 @@
+ARG VERSION=dev
+ARG REVISION=unknown
+ARG CREATED=unknown
+
 FROM golang:1.26-alpine AS core-builder
+
+ARG VERSION
 
 WORKDIR /workspace/Core
 
 COPY Core /workspace/Core
 
-RUN go build -ldflags="-s -w" -o nzip-core .
+RUN go build -trimpath -ldflags="-s -w -X 'main.Version=${VERSION}'" -o nzip-core .
 
 FROM oven/bun:alpine AS nzip-builder
 
@@ -16,14 +22,18 @@ RUN bun run build
 
 FROM oven/bun:alpine
 
+ARG VERSION
+ARG REVISION
+ARG CREATED
+
 LABEL org.opencontainers.image.url="https://ghcr.io/nzip-team/nzip"
 LABEL org.opencontainers.image.source="https://github.com/nZip-Team/nZip"
 LABEL org.opencontainers.image.title="nZip"
 LABEL org.opencontainers.image.description="Download doujinshis from nhentai.net as a zip archive."
-LABEL org.opencontainers.image.version="1.13.0-beta"
+LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.revision=""
-LABEL org.opencontainers.image.created="2026-02-24T06:26:13.368Z"
+LABEL org.opencontainers.image.revision="${REVISION}"
+LABEL org.opencontainers.image.created="${CREATED}"
 
 WORKDIR /workspace
 
