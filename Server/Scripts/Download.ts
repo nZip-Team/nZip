@@ -62,6 +62,7 @@ function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, stat
 }
 
 const image_cover = document.getElementById('image-cover') as HTMLDivElement
+const step_connect_container = document.getElementById('step-connect-container') as HTMLDivElement
 const step_connect_status = document.getElementById('step-connect-status') as HTMLDivElement
 const step_download_container = document.getElementById('step-download-container') as HTMLDivElement
 const step_download_status = document.getElementById('step-download-status') as HTMLDivElement
@@ -74,6 +75,7 @@ const progress_result = document.getElementById('progress-result') as HTMLLinkEl
 const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 
 const socket = new WebSocket(window.location.href.replace(/\/g\//, '/ws/g/'))
+let _receivedAnyMessage = false
 
 socket.addEventListener('open', () => {
   const startTime = Date.now()
@@ -89,6 +91,7 @@ socket.addEventListener('open', () => {
   let step_pack: boolean = false
 
   socket.addEventListener('message', async (event) => {
+    _receivedAnyMessage = true
     const raw = await event.data.arrayBuffer()
     const buffer = new Uint8Array(raw)
     const view = new DataView(raw)
@@ -179,6 +182,20 @@ socket.addEventListener('open', () => {
       const a = document.createElement('a')
       a.href = url
       a.click()
+    }
+  })
+
+  socket.addEventListener('error', () => {
+    statusAnimation(step_connect_container, step_connect_status, 'error')
+    progress_text.innerHTML = 'Connection failed or rate limited'
+    progress_text.style.color = '#ff4444'
+  })
+
+  socket.addEventListener('close', () => {
+    if (!_receivedAnyMessage) {
+      statusAnimation(step_connect_container, step_connect_status, 'error')
+      progress_text.innerHTML = 'Server busy or rate limited. Try again later.'
+      progress_text.style.color = '#ff4444'
     }
   })
 })

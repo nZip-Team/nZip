@@ -14,6 +14,7 @@ import Log from './Modules/Log'
 
 import Pages, { type PageName } from './Modules/Pages'
 import WebSocketHandler from './WebSocket'
+import RateLimiter from './RateLimiter'
 import Languages from './Modules/Language'
 import Scripts from './Modules/Scripts'
 import { Core } from './Modules/Core'
@@ -62,6 +63,8 @@ export default async (): Promise<() => Promise<void>> => {
     sessionStore,
     core.downloadManager
   )
+
+  const wsRateLimiter = new RateLimiter(20, 60 * 1000)
 
   analytics = Config.analytics || null
 
@@ -152,8 +155,14 @@ export default async (): Promise<() => Promise<void>> => {
     return c.redirect(`/g/${id}`)
   })
 
-  // TODO: Rate limit
-  app.get('/ws/g/:id', upgradeWebSocket((c) => {
+  app.get('/ws/g/:id', async (c, next) => {
+    const ip = getIP(c)
+    if (!wsRateLimiter.allow(ip)) {
+      c.status(429)
+      return c.text('Too Many Requests')
+    }
+    await next()
+  }, upgradeWebSocket((c) => {
     return WSHandler.handle(c)
   }))
 
