@@ -64,7 +64,7 @@ export default async (): Promise<() => Promise<void>> => {
     core.downloadManager
   )
 
-  const wsRateLimiter = new RateLimiter(20, 60 * 1000)
+  const wsRateLimiter = new RateLimiter(Config.rateLimit, 60 * 1000)
 
   analytics = Config.analytics || null
 
@@ -158,6 +158,8 @@ export default async (): Promise<() => Promise<void>> => {
   app.get('/ws/g/:id', async (c, next) => {
     const ip = getIP(c)
     if (!wsRateLimiter.allow(ip)) {
+      const retry = wsRateLimiter.getRetryAfterSeconds(ip) || 60
+      c.header('Retry-After', String(retry))
       c.status(429)
       return c.text('Too Many Requests')
     }

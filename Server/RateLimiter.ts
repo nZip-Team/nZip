@@ -1,17 +1,86 @@
-/**
- * Simple in-memory rate limiter keyed by IP prefix:
- * - IPv4: /24 (first 3 octets)
- * - IPv6: /64 (first 4 hextets)
- */
+interface Bucket {
+  tokens: number
+  lastRefill: number
+}
+
 export default class RateLimiter {
   private maxRequests: number
-  private windowMs: number
-  private store: Map<string, number[]>
+  private refillIntervalMs: number
+  private store: Map<string, Bucket>
+  private cleanupTimer: ReturnType<typeof setInterval>
 
   constructor(maxRequests: number, windowMs: number) {
     this.maxRequests = maxRequests
-    this.windowMs = windowMs
+    this.refillIntervalMs = maxRequests > 0 ? windowMs / maxRequests : windowMs
     this.store = new Map()
+
+    this.cleanupTimer = setInterval(() => this.cleanup(), windowMs)
+    if (this.cleanupTimer.unref) this.cleanupTimer.unref()
+  }
+
+  private refill(bucket: Bucket): void {
+    const now = Date.now()
+    const elapsed = now - bucket.lastRefill
+    const earned = Math.floor(elapsed / this.refillIntervalMs)
+
+    if (earned > 0) {
+      bucket.tokens = Math.min(this.maxRequests, bucket.tokens + earned)
+      bucket.lastRefill += earned * this.refillIntervalMs
+    }
+  }
+
+  public allow(ip: string): boolean {
+    const key = this.getPrefix(ip)
+
+    let bucket = this.store.get(key)
+    if (!bucket) {
+      bucket = { tokens: this.maxRequests, lastRefill: Date.now() }
+      this.store.set(key, bucket)
+    }
+
+    this.refill(bucket)
+
+    if (bucket.tokens >= 1) {
+      bucket.tokens -= 1
+      return true
+    }
+
+    return false
+  }
+
+  public getRetryAfterMs(ip: string): number {
+    const key = this.getPrefix(ip)
+
+    const bucket = this.store.get(key)
+    if (!bucket) return 0
+
+    this.refill(bucket)
+
+    if (bucket.tokens >= 1) return 0
+
+    const now = Date.now()
+    const msUntilNextToken = this.refillIntervalMs - (now - bucket.lastRefill)
+    return Math.max(0, msUntilNextToken)
+  }
+
+  public getRetryAfterSeconds(ip: string): number {
+    return Math.max(0, Math.ceil(this.getRetryAfterMs(ip) / 1000))
+  }
+
+  private cleanup(): void {
+    const now = Date.now()
+    for (const [key, bucket] of this.store) {
+      const elapsed = now - bucket.lastRefill
+      const wouldEarn = Math.floor(elapsed / this.refillIntervalMs)
+      if (bucket.tokens + wouldEarn >= this.maxRequests) {
+        this.store.delete(key)
+      }
+    }
+  }
+
+  public destroy(): void {
+    clearInterval(this.cleanupTimer)
+    this.store.clear()
   }
 
   private stripZone(ip: string): string {
@@ -37,7 +106,6 @@ export default class RateLimiter {
     const ip = this.stripZone(ipRaw).trim()
     if (!ip) return 'unknown'
 
-    // IPv4
     if (ip.includes('.')) {
       const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
       if (!m) return `ipv4:${ip}`
@@ -48,7 +116,6 @@ export default class RateLimiter {
       return `ipv4:${a}.${b}.${c}`
     }
 
-    // IPv6
     try {
       const normalized = ip.replace(/^[\[|\]]+|[\[|\]]+$/g, '')
       const segs = this.expandIPv6(normalized)
@@ -57,23 +124,5 @@ export default class RateLimiter {
     } catch {
       return `ipv6:${ip}`
     }
-  }
-
-  public allow(ip: string): boolean {
-    const key = this.getPrefix(ip)
-    const now = Date.now()
-    const windowStart = now - this.windowMs
-
-    let arr = this.store.get(key) || []
-    arr = arr.filter((t) => t > windowStart)
-
-    if (arr.length >= this.maxRequests) {
-      this.store.set(key, arr)
-      return false
-    }
-
-    arr.push(now)
-    this.store.set(key, arr)
-    return true
   }
 }
