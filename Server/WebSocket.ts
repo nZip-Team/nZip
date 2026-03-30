@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import { CronJob } from 'cron'
 
-import nhget, { type GalleryData } from '@icebrick/nhget'
+import nhget from '@icebrick/nhget'
 import Log from './Modules/Log'
 import type { DownloadResult, IDownloadManager, ISessionStore } from './Modules/Core'
 
@@ -476,7 +476,7 @@ export default class WebSocketHandler {
 
     try {
       Log.info(`Fetching gallery metadata: ${id}`)
-      const response: GalleryData = (await this.nh.get(id)) as GalleryData
+      const response = await this.nh.get(id)
 
       if (response.error) {
         session.isAborting = true
@@ -494,10 +494,7 @@ export default class WebSocketHandler {
       const downloadDir = path.join(this.downloadDir, hash)
       fs.mkdirSync(downloadDir, { recursive: true })
 
-      const images = response.images.pages.map((page, index) => {
-        const extension = page.t === 'j' ? 'jpg' : page.t === 'g' ? 'gif' : page.t === 'w' ? 'webp' : 'png'
-        return `${this.imageHost}/galleries/${response.media_id}/${index + 1}.${extension}`
-      })
+      const images = response.pages.map(page => `${this.imageHost}/${page.path}`)
 
       const filename = this.generateFilename(response.id, response.title)
       session.filename = filename

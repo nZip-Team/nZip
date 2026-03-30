@@ -191,7 +191,7 @@ export class Core {
     })
 
     proc.on('exit', (code, signal) => {
-      Log.debug(`Core: process exited (code=${code} signal=${signal})`)
+      DebugLog(`Core: process exited (code=${code} signal=${signal})`)
       void this.handleTransportClose(proc, `process exited (code=${code} signal=${signal})`)
     })
 
@@ -295,7 +295,7 @@ export class Core {
       throw new Error(this.intentionalClose || this.suppressRestart ? 'Core: closed' : 'Core: not started')
     }
     const line = JSON.stringify(cmd) + '\n'
-    Log.debug(`Core ->  [${cmd.reqId}] ${cmd.cmd}`)
+    DebugLog(`Core ->  [${cmd.reqId}] ${cmd.cmd}`)
     try {
       this.procStdin.write(line)
     } catch (err) {
@@ -374,7 +374,7 @@ export class Core {
     this.handledTransportClose.add(proc)
 
     if (this.intentionalClose || this.suppressRestart) {
-      Log.debug(`Core: ${reason} (intentional shutdown)`)
+      DebugLog(`Core: ${reason} (intentional shutdown)`)
       if (this.proc === proc) {
         this.proc = null
         this.procStdin = null
@@ -405,18 +405,18 @@ export class Core {
   private handleResponse(resp: GoResponse): void {
     const pending = this.pending.get(resp.reqId)
     if (!pending) {
-      Log.debug(`Core <-  [${resp.reqId}] orphaned ${resp.type} (no pending request)`)
+      DebugLog(`Core <-  [${resp.reqId}] orphaned ${resp.type} (no pending request)`)
       return
     }
 
     if (resp.type === 'progress') {
-      Log.debug(`Core <-  [${resp.reqId}] progress ${resp.completed}/${resp.total}`)
+      // DebugLog(`Core <-  [${resp.reqId}] progress ${resp.completed}/${resp.total}`)
       pending.onProgress?.(resp.completed ?? 0, resp.total ?? 0)
       return
     }
 
     if (resp.type === 'packStart') {
-      Log.debug(`Core <-  [${resp.reqId}] packStart`)
+      DebugLog(`Core <-  [${resp.reqId}] packStart`)
       pending.onPackStart?.()
       return
     }
@@ -426,17 +426,17 @@ export class Core {
 
     if (!resp.ok) {
       if (resp.errorCode !== undefined) {
-        Log.debug(`Core <-  [${resp.reqId}] result error code=0x${resp.errorCode.toString(16)}`)
+        DebugLog(`Core <-  [${resp.reqId}] result error code=0x${resp.errorCode.toString(16)}`)
         // Download error - resolve with a typed failure object rather than reject.
         pending.resolve({ success: false, errorCode: resp.errorCode })
       } else {
-        Log.debug(`Core <-  [${resp.reqId}] result error: ${resp.error}`)
+        DebugLog(`Core <-  [${resp.reqId}] result error: ${resp.error}`)
         pending.reject(new Error(resp.error ?? 'Core: unknown error'))
       }
       return
     }
 
-    Log.debug(`Core <-  [${resp.reqId}] result ok`)
+    DebugLog(`Core <-  [${resp.reqId}] result ok`)
     // Scalar value (bool) or object data.
     pending.resolve(resp.value !== undefined ? resp.value : resp.data ?? null)
   }
@@ -507,7 +507,7 @@ export class CoreDownloadManager implements IDownloadManager {
   constructor(private backend: Core) {}
 
   async run(config: DownloadConfig): Promise<DownloadResult> {
-    Log.debug(`Core: download.start ${config.hash} (${config.images.length} images, concurrency=${config.concurrentDownloads})`)
+    DebugLog(`Core: download.start ${config.hash} (${config.images.length} images, concurrency=${config.concurrentDownloads})`)
     this.active.add(config.hash)
 
     // Poll config.isAborting() and forward abort signals to Go.
@@ -516,7 +516,7 @@ export class CoreDownloadManager implements IDownloadManager {
       if (!abortSent && config.isAborting()) {
         abortSent = true
         clearInterval(pollInterval)
-        Log.debug(`Core: abort signal forwarded for ${config.hash}`)
+        DebugLog(`Core: abort signal forwarded for ${config.hash}`)
         this.stopDownload(config.hash).catch(() => {})
       }
     }, 200)
@@ -537,7 +537,7 @@ export class CoreDownloadManager implements IDownloadManager {
           onPackStart: config.onPackStart,
         }
       )
-      Log.debug(`Core: download.start finished ${config.hash} success=${result.success}`)
+      DebugLog(`Core: download.start finished ${config.hash} success=${result.success}`)
       return result
     } finally {
       clearInterval(pollInterval)
@@ -562,5 +562,11 @@ export class CoreDownloadManager implements IDownloadManager {
     this.backend
       .call({ cmd: 'download.cleanTempFiles', downloadDir, filename })
       .catch((err) => Log.warn(`Core: cleanTempFiles error: ${err}`))
+  }
+}
+
+function DebugLog(...args: unknown[]): void {
+  if (process.env['NODE_ENV'] === 'development') {
+    Log.debug(...args)
   }
 }

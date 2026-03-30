@@ -9,7 +9,7 @@ import path from 'path'
 
 import Config from '../Config'
 
-import nhget, { type GalleryData } from '@icebrick/nhget'
+import nhget from '@icebrick/nhget'
 import Log from './Modules/Log'
 
 import Pages, { type PageName } from './Modules/Pages'
@@ -48,7 +48,7 @@ if (!fs.existsSync(downloadDir)) {
  */
 export default async (): Promise<() => Promise<void>> => {
   const nh = new nhget({
-    endpoint: `${Config.apiHost}/api/gallery/`,
+    endpoint: `${Config.apiHost}/api/v2/galleries/`,
     imageEndpoint: `${Config.imageHost}/galleries/`
   })
 
@@ -116,7 +116,7 @@ export default async (): Promise<() => Promise<void>> => {
     }
 
     try {
-      const response: GalleryData = await nh.get(id) as GalleryData
+      const response = await nh.get(id)
 
       if (response.error) {
         c.status(404)
@@ -124,10 +124,8 @@ export default async (): Promise<() => Promise<void>> => {
           error: 'We cannot find this doujinshi, maybe try going back to <a href="/">home</a> and try another one?'
         })
       } else {
-        const type = response.images.pages[0].t
-        const extension = type === 'j' ? 'jpg' : type === 'g' ? 'gif' : type === 'w' ? 'webp' : 'png'
         const title = response.title.english || response.title.japanese || response.title.pretty || null
-        const cover = `${Config.imageHost}/galleries/${response.media_id}/1.${extension}`
+        const cover = `${Config.imageHost}/${response.pages[0].path}`
         return Page(c, 'Download', { id, title, cover })
       }
     } catch (error) {
@@ -444,6 +442,7 @@ export function getLang(c: AppContext): string {
 async function Static(c: AppContext, paramName: string, dir: string, contentType: string, errorPage: Record<string, unknown>, cacheControl?: string): Promise<Response> {
   try {
     const fileName = c.req.param(paramName)
+    if (!fileName) throw new Error('No file specified')
     const fullPath = sanitizePath(fileName, `${filePath}/${dir}`)
 
     if (!fullPath) throw new Error()
