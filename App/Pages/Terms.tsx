@@ -36,7 +36,10 @@ export default (args: { t: (key: string) => string }) => {
           </p>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', width: '90dvw', marginTop: '1.5rem' }}>
-          <a className="text" style={{ fontSize: '1.5rem' }} href="javascript:history.back()">{t('Back')}</a>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a className="text" style={{ fontSize: '1.5rem', whiteSpace: 'nowrap' }} href="/dmca">{t('DMCA Policy')}</a>
+            <a className="text" style={{ fontSize: '1.5rem', whiteSpace: 'nowrap' }} href="javascript:history.back()">{t('Back')}</a>
+          </div>
         </div>
       </body>
     )

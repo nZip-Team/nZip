@@ -10,6 +10,7 @@ import _Download from '../../App/Pages/Download'
 import _Error from '../../App/Pages/Error'
 import _Terms from '../../App/Pages/Terms'
 import _Privacy from '../../App/Pages/Privacy'
+import _DMCA from '../../App/Pages/DMCA'
 
 type PageModule = (args?: any) => {
   title: string
@@ -25,6 +26,7 @@ const RawPageModules = {
   Error: _Error as unknown as PageModule,
   Terms: _Terms as unknown as PageModule,
   Privacy: _Privacy as unknown as PageModule,
+  DMCA: _DMCA as unknown as PageModule
 } as const satisfies Record<string, PageModule>
 
 type PageName = keyof typeof RawPageModules

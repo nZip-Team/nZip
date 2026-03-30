@@ -37,7 +37,8 @@
     "By using nZip, you acknowledge that you have read and understood this Terms of Service and Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "By using nZip, you acknowledge that you have read and understood this Terms of Service and Privacy Policy document. If you do not agree with these terms, please refrain from using the service.",
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.",
     "Back": "Back",
-    "Privacy Policy": "Privacy Policy"
+    "Privacy Policy": "Privacy Policy",
+    "DMCA Policy": "DMCA Policy"
   },
 
   "Privacy": {
@@ -54,5 +55,15 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.",
     "Back": "Back",
     "Terms of Service": "Terms of Service"
+  }
+  ,
+  "DMCA": {
+    "DMCA Policy": "DMCA Policy",
+    "nZip respects the intellectual property rights of others. If you believe that your copyrighted work has been copied in a way that constitutes copyright infringement and is accessible via this project, please contact us.": "nZip respects the intellectual property rights of others. If you believe that your copyrighted work has been copied in a way that constitutes copyright infringement and is accessible via this project, please contact us.",
+    "How to File a Notice": "How to File a Notice",
+    "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.": "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.",
+    "Send Notices": "Send Notices",
+    "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.",
+    "Back": "Back"
   }
 }

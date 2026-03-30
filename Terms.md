@@ -33,3 +33,7 @@ We value your privacy and are committed to being transparent about the data we c
 By using nZip, you acknowledge that you have read and understood this Terms of Service and Privacy Policy document. If you do not agree with these terms, please refrain from using the service.
 
 If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.
+
+## DMCA
+
+If you believe your copyrighted work has been used in a way that infringes your rights, please see our DMCA policy: [DMCA Policy](DMCA.md) for information on how to submit a takedown notice and counter-notice.

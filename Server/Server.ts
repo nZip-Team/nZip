@@ -109,6 +109,8 @@ export default async (): Promise<() => Promise<void>> => {
 
   app.get('/privacy', (c) => StaticPage(c, 'Privacy'))
 
+  app.get('/dmca', (c) => StaticPage(c, 'DMCA'))
+
   app.get('/g/:id', async (c) => {
     let id = c.req.param('id')
     if (!id || !Number(id)) {
