@@ -104,9 +104,25 @@ jobs:
 
       - name: Create GitHub release
         if: steps.parse_release.outputs.matched == 'true' && steps.tag_check.outputs.exists == 'false'
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.parse_release.outputs.tag }}
           name: ${{ steps.parse_release.outputs.title }}
           target_commitish: ${{ steps.commit_bump.outputs.sha || github.event.client_payload.sha || github.sha }}
           generate_release_notes: true
+
+      - name: Trigger Docker workflow
+        if: steps.create_release.outcome == 'success'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'run-docker',
+              client_payload: {
+                sha: '${{ steps.commit_bump.outputs.sha || github.event.client_payload.sha || github.sha }}',
+                tag: '${{ steps.parse_release.outputs.tag }}'
+              }
+            })
