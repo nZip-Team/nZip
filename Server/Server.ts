@@ -9,7 +9,7 @@ import path from 'path'
 
 import Config from '../Config'
 
-import nhget from '@icebrick/nhget'
+import nhget from './Modules/nhget'
 import Log from './Modules/Log'
 
 import Pages, { type PageName } from './Modules/Pages'

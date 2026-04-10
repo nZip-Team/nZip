@@ -1,0 +1,75 @@
+name: Release nZip
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release ')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Parse release commit message
+        id: parse_release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
+          else
+            COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+          fi
+
+          # Use only the first line to avoid body text affecting the parser.
+          COMMIT_MESSAGE="$(echo "$COMMIT_MESSAGE" | tr -d '\r' | head -n1)"
+
+          if [[ "$COMMIT_MESSAGE" =~ ^Release[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+),[[:space:]]+(.+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            NOTE="${BASH_REMATCH[2]}"
+            TAG="v$VERSION"
+
+            echo "matched=true" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "title=$TAG" >> "$GITHUB_OUTPUT"
+            echo "note=$NOTE" >> "$GITHUB_OUTPUT"
+            echo "Release message matched. Preparing release for $VERSION."
+          else
+            echo "matched=false" >> "$GITHUB_OUTPUT"
+            echo "Commit message did not match expected format: Release x.y.z, description"
+          fi
+
+      - name: Check whether tag already exists
+        id: tag_check
+        if: steps.parse_release.outputs.matched == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ steps.parse_release.outputs.tag }}"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists. Skipping release creation."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub release
+        if: steps.parse_release.outputs.matched == 'true' && steps.tag_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.parse_release.outputs.tag }}
+          name: ${{ steps.parse_release.outputs.title }}
+          generate_release_notes: true

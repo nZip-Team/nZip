@@ -14,6 +14,20 @@ nZip is a convenient tool for downloading doujinshi from nhentai.net as a zip ar
 
 3. **Download the Archive**: Once you have entered the URL or ID, it will automatically fetch the images and download the archive.
 
+## How nZip Works?
+
+nZip makes a downloadable zip file from a gallery code you provide. Here is the simple flow:
+
+- You enter a code to request a download.
+- If a ready-made zip already exists for that code, nZip returns the download link right away.
+- If not, nZip fetches the gallery images, downloads them, and packs them into a zip file.
+- While that work is happening you see progress updates in your browser so you know what's happening.
+- When the zip is ready, nZip gives you a link to download it.
+- The zip is kept temporarily on the server and removed after a short time to save space.
+- If something goes wrong, nZip shows a clear error message and you can try again.
+
+That's it - enter a code, watch progress, and download the zip.
+
 ## Running the Project
 
 ### Using Docker

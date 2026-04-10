@@ -6,6 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import { spawn, type ChildProcess } from 'node:child_process'
 import Log from './Log'
+import { startInterval } from './Interval'
 import Config from '../../Config'
 
 export interface DownloadConfig {
@@ -37,16 +38,25 @@ export interface SharedSessionData {
   hash: string
   downloadCompleted: boolean
   isDownloading: boolean
-  downloadingBy?: string
-  filename?: string
-  downloadLink?: string
-  lastDownloadStatus?: string
-  lastPackStatus?: string
-  lastLinkStatus?: string
+  downloadingBy?: string | null
+  filename?: string | null
+  downloadLink?: string | null
+  lastDownloadStatus?: string | null
+  lastPackStatus?: string | null
+  lastLinkStatus?: string | null
   isAborting: boolean
   createdAt: number
   lastActivityAt: number
 }
+
+const NULLABLE_SESSION_KEYS: ReadonlySet<keyof SharedSessionData> = new Set([
+  'downloadingBy',
+  'filename',
+  'downloadLink',
+  'lastDownloadStatus',
+  'lastPackStatus',
+  'lastLinkStatus'
+])
 
 export interface ISessionStore {
   getOrCreate(id: string, hash: string): Promise<SharedSessionData>
@@ -454,8 +464,17 @@ class CoreSessionStore implements ISessionStore {
   }
 
   async update(hash: string, data: Partial<SharedSessionData>): Promise<void> {
-    // Serialize through JSON to strip undefined fields before sending.
-    const clean = JSON.parse(JSON.stringify(data))
+    const clean: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(data) as Array<[keyof SharedSessionData, unknown]>) {
+      if (value === undefined) {
+        if (NULLABLE_SESSION_KEYS.has(key)) {
+          clean[key] = null
+        }
+        continue
+      }
+      clean[key] = value
+    }
+
     await this.backend.call({ cmd: 'session.update', hash, data: clean })
   }
 
@@ -512,10 +531,10 @@ export class CoreDownloadManager implements IDownloadManager {
 
     // Poll config.isAborting() and forward abort signals to Go.
     let abortSent = false
-    const pollInterval = setInterval(() => {
+    const pollInterval = startInterval(() => {
       if (!abortSent && config.isAborting()) {
         abortSent = true
-        clearInterval(pollInterval)
+        pollInterval.stop()
         DebugLog(`Core: abort signal forwarded for ${config.hash}`)
         this.stopDownload(config.hash).catch(() => {})
       }
@@ -540,7 +559,7 @@ export class CoreDownloadManager implements IDownloadManager {
       DebugLog(`Core: download.start finished ${config.hash} success=${result.success}`)
       return result
     } finally {
-      clearInterval(pollInterval)
+      pollInterval.stop()
       this.active.delete(config.hash)
     }
   }

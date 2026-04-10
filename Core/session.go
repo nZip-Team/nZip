@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -29,15 +30,37 @@ type SharedSessionData struct {
 
 // SessionPatch holds the optional fields that can be updated.
 type SessionPatch struct {
-	DownloadCompleted  *bool   `json:"downloadCompleted"`
-	IsDownloading      *bool   `json:"isDownloading"`
-	DownloadingBy      *string `json:"downloadingBy"` // explicit null clears it
-	Filename           *string `json:"filename"`
-	DownloadLink       *string `json:"downloadLink"`
-	LastDownloadStatus *string `json:"lastDownloadStatus"`
-	LastPackStatus     *string `json:"lastPackStatus"`
-	LastLinkStatus     *string `json:"lastLinkStatus"`
-	IsAborting         *bool   `json:"isAborting"`
+	DownloadCompleted  *bool               `json:"downloadCompleted"`
+	IsDownloading      *bool               `json:"isDownloading"`
+	DownloadingBy      NullableStringPatch `json:"downloadingBy"`
+	Filename           NullableStringPatch `json:"filename"`
+	DownloadLink       NullableStringPatch `json:"downloadLink"`
+	LastDownloadStatus NullableStringPatch `json:"lastDownloadStatus"`
+	LastPackStatus     NullableStringPatch `json:"lastPackStatus"`
+	LastLinkStatus     NullableStringPatch `json:"lastLinkStatus"`
+	IsAborting         *bool               `json:"isAborting"`
+}
+
+// NullableStringPatch tracks whether a nullable string field was provided,
+// and whether it was set to a concrete string or explicit null.
+type NullableStringPatch struct {
+	Set   bool
+	Value *string
+}
+
+func (p *NullableStringPatch) UnmarshalJSON(data []byte) error {
+	p.Set = true
+	if string(data) == "null" {
+		p.Value = nil
+		return nil
+	}
+
+	var v string
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	p.Value = &v
+	return nil
 }
 
 // SessionStore is a SQLite-backed, thread-safe session store.
@@ -202,29 +225,29 @@ func (s *SessionStore) Update(hash string, patch SessionPatch) error {
 		cols = append(cols, "isDownloading=?")
 		vals = append(vals, boolToInt(*patch.IsDownloading))
 	}
-	if patch.DownloadingBy != nil {
+	if patch.DownloadingBy.Set {
 		cols = append(cols, "downloadingBy=?")
-		vals = append(vals, *patch.DownloadingBy)
+		vals = append(vals, patch.DownloadingBy.Value)
 	}
-	if patch.Filename != nil {
+	if patch.Filename.Set {
 		cols = append(cols, "filename=?")
-		vals = append(vals, *patch.Filename)
+		vals = append(vals, patch.Filename.Value)
 	}
-	if patch.DownloadLink != nil {
+	if patch.DownloadLink.Set {
 		cols = append(cols, "downloadLink=?")
-		vals = append(vals, *patch.DownloadLink)
+		vals = append(vals, patch.DownloadLink.Value)
 	}
-	if patch.LastDownloadStatus != nil {
+	if patch.LastDownloadStatus.Set {
 		cols = append(cols, "lastDownloadStatus=?")
-		vals = append(vals, *patch.LastDownloadStatus)
+		vals = append(vals, patch.LastDownloadStatus.Value)
 	}
-	if patch.LastPackStatus != nil {
+	if patch.LastPackStatus.Set {
 		cols = append(cols, "lastPackStatus=?")
-		vals = append(vals, *patch.LastPackStatus)
+		vals = append(vals, patch.LastPackStatus.Value)
 	}
-	if patch.LastLinkStatus != nil {
+	if patch.LastLinkStatus.Set {
 		cols = append(cols, "lastLinkStatus=?")
-		vals = append(vals, *patch.LastLinkStatus)
+		vals = append(vals, patch.LastLinkStatus.Value)
 	}
 	if patch.IsAborting != nil {
 		cols = append(cols, "isAborting=?")
@@ -363,27 +386,39 @@ func (s *SessionStore) ReleaseLock(hash, processID string) error {
 	return err
 }
 
-// startCleanupJob periodically deletes sessions older than 5 minutes.
+// startCleanupJob periodically deletes sessions older than 5 minutes at :00s.
 func (s *SessionStore) startCleanupJob() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
 	defer close(s.cleanupDone)
+
+	runCleanup := func() {
+		cutoff := time.Now().Add(-5 * time.Minute).UnixMilli()
+		s.mu.Lock()
+		res, err := s.db.Exec(`DELETE FROM sessions WHERE lastActivityAt<?`, cutoff)
+		s.mu.Unlock()
+		if err != nil {
+			logWarn("Session cleanup: %v", err)
+			return
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			logInfo("Session cleanup: removed %d expired session(s)", n)
+		}
+	}
+
 	for {
+		nextRun := time.Now().Truncate(time.Minute).Add(time.Minute)
+		timer := time.NewTimer(time.Until(nextRun))
+
 		select {
 		case <-s.cleanupStop:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			return
-		case <-ticker.C:
-			cutoff := time.Now().Add(-5 * time.Minute).UnixMilli()
-			s.mu.Lock()
-			res, err := s.db.Exec(`DELETE FROM sessions WHERE lastActivityAt<?`, cutoff)
-			s.mu.Unlock()
-			if err != nil {
-				logWarn("Session cleanup: %v", err)
-				continue
-			}
-			if n, _ := res.RowsAffected(); n > 0 {
-				logInfo("Session cleanup: removed %d expired session(s)", n)
-			}
+		case <-timer.C:
+			runCleanup()
 		}
 	}
 }

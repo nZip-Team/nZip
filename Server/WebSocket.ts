@@ -1,11 +1,11 @@
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
-import { CronJob } from 'cron'
 
-import nhget from '@icebrick/nhget'
+import nhget from './Modules/nhget'
 import Log from './Modules/Log'
 import type { DownloadResult, IDownloadManager, ISessionStore } from './Modules/Core'
+import { startInterval, type IntervalHandle } from './Modules/Interval'
 
 import Config from '../Config'
 
@@ -31,12 +31,15 @@ interface DownloadSession {
   isAborting: boolean
   lastAccessTime: number
   downloadPromise?: Promise<void>
-  lockRefreshTimer?: ReturnType<typeof setInterval>
+  lockRefreshTimer?: IntervalHandle
   lastDownloadPersistAt: number
 }
 
 export default class WebSocketHandler {
   private static readonly DOWNLOAD_STATUS_PERSIST_INTERVAL_MS = 1000
+  private static readonly LOCK_REFRESH_INTERVAL_MS = 30000
+  private static readonly FAILED_SESSION_TIMEOUT_MS = 180000
+  private static readonly COMPLETED_SESSION_IDLE_TIMEOUT_MS = 300000
   private nh: nhget
   private imageHost: string
   private downloadManager: IDownloadManager
@@ -45,7 +48,7 @@ export default class WebSocketHandler {
   private concurrentImageDownloads: number
   private downloadDir: string
   private processID: string
-  private cleanupCron?: CronJob
+  private cleanupCron?: Bun.CronJob
   private initialCleanupTimer?: ReturnType<typeof setTimeout>
 
   constructor(nh: nhget, downloadDir: string, sessionStore: ISessionStore, downloadManager: IDownloadManager) {
@@ -152,6 +155,7 @@ export default class WebSocketHandler {
     Log.warn(`WS Missing Zip Reset: ${session.id} - ${session.filename}`)
 
     session.downloadCompleted = false
+    session.filename = undefined
     session.downloadLink = undefined
     session.lastLinkBuffer = undefined
     session.lastDownloadBuffer = undefined
@@ -160,10 +164,11 @@ export default class WebSocketHandler {
 
     await this.sessionStore.update(session.hash, {
       downloadCompleted: false,
-      downloadLink: undefined,
-      lastLinkStatus: undefined,
-      lastDownloadStatus: undefined,
-      lastPackStatus: undefined,
+      filename: null,
+      downloadLink: null,
+      lastLinkStatus: null,
+      lastDownloadStatus: null,
+      lastPackStatus: null,
       isAborting: false
     })
 
@@ -293,11 +298,11 @@ export default class WebSocketHandler {
       hash,
       clients: new Set(),
       downloadCompleted: sharedSession.downloadCompleted,
-      filename: sharedSession.filename,
+      filename: sharedSession.filename ?? undefined,
       lastDownloadBuffer,
       lastPackBuffer,
       lastLinkBuffer,
-      downloadLink: sharedSession.downloadLink,
+      downloadLink: sharedSession.downloadLink ?? undefined,
       isAborting: sharedSession.isAborting,
       lastAccessTime: Date.now(),
       lastDownloadPersistAt: 0
@@ -459,11 +464,11 @@ export default class WebSocketHandler {
     const hash = session.hash
 
     if (session.lockRefreshTimer) {
-      clearInterval(session.lockRefreshTimer)
+      session.lockRefreshTimer.stop()
       session.lockRefreshTimer = undefined
     }
 
-    session.lockRefreshTimer = setInterval(async () => {
+    session.lockRefreshTimer = startInterval(async () => {
       try {
         const refreshed = await this.sessionStore.refreshLock(hash, this.processID)
         if (!refreshed) {
@@ -472,7 +477,7 @@ export default class WebSocketHandler {
       } catch (error) {
         Log.warn(`WS Lock Refresh Error: ${id} - ${hash} - ${error}`)
       }
-    }, 60000)
+    }, WebSocketHandler.LOCK_REFRESH_INTERVAL_MS)
 
     try {
       Log.info(`Fetching gallery metadata: ${id}`)
@@ -554,7 +559,7 @@ export default class WebSocketHandler {
       this.signalSessionFailure(session, Buffer.from([0x01]), 1011, 'Internal Server Error')
     } finally {
       if (session.lockRefreshTimer) {
-        clearInterval(session.lockRefreshTimer)
+        session.lockRefreshTimer.stop()
         session.lockRefreshTimer = undefined
       }
     }
@@ -587,7 +592,7 @@ export default class WebSocketHandler {
         })
         .finally(() => {
           if (session.lockRefreshTimer) {
-            clearInterval(session.lockRefreshTimer)
+            session.lockRefreshTimer.stop()
             session.lockRefreshTimer = undefined
           }
           const downloadDir = path.join(this.downloadDir, session.hash)
@@ -601,7 +606,7 @@ export default class WebSocketHandler {
     }
 
     if (session.lockRefreshTimer) {
-      clearInterval(session.lockRefreshTimer)
+      session.lockRefreshTimer.stop()
       session.lockRefreshTimer = undefined
     }
 
@@ -671,8 +676,8 @@ export default class WebSocketHandler {
   private async cleanupStaleSessions(): Promise<void> {
     const now = Date.now()
     const sessionsToClean: string[] = []
-    const IDLE_TIMEOUT = 3e5
-    const FAILED_TIMEOUT = 6e4
+    const IDLE_TIMEOUT = WebSocketHandler.COMPLETED_SESSION_IDLE_TIMEOUT_MS
+    const FAILED_TIMEOUT = WebSocketHandler.FAILED_SESSION_TIMEOUT_MS
 
     for (const [hash, session] of this.sessions.entries()) {
       const idleTime = now - session.lastAccessTime
@@ -692,6 +697,17 @@ export default class WebSocketHandler {
 
       const storeSession = await this.sessionStore.get(hash)
       if (storeSession) {
+        if (storeSession.isDownloading && storeSession.downloadingBy !== this.processID) {
+          Log.info(`Skipping stale cleanup for remote active session: ${session.id} (${storeSession.downloadingBy ?? 'unknown'})`)
+          this.clearSessionBuffers(session)
+          session.downloadLink = undefined
+          session.filename = undefined
+          session.downloadPromise = undefined
+          session.clients.clear()
+          this.sessions.delete(hash)
+          continue
+        }
+
         const storeIdleTime = now - storeSession.lastActivityAt
         const effectiveTimeout = storeSession.downloadCompleted && !storeSession.isAborting ? IDLE_TIMEOUT : FAILED_TIMEOUT
         if (storeIdleTime < effectiveTimeout) {
@@ -713,7 +729,7 @@ export default class WebSocketHandler {
       }
 
       if (session.lockRefreshTimer) {
-        clearInterval(session.lockRefreshTimer)
+        session.lockRefreshTimer.stop()
         session.lockRefreshTimer = undefined
       }
 
@@ -744,14 +760,18 @@ export default class WebSocketHandler {
       return
     }
 
-    this.cleanupCron = new CronJob('*/5 * * * *', () => {
-      this.cleanupStaleSessions().then(() => this.cleanOrphanedDownloads())
+    this.cleanupCron = Bun.cron('*/5 * * * *', async () => {
+      await this.cleanupStaleSessions()
+      await this.cleanOrphanedDownloads()
     })
-    this.cleanupCron.start()
 
     this.initialCleanupTimer = setTimeout(() => {
       this.initialCleanupTimer = undefined
-      this.cleanupStaleSessions().then(() => this.cleanOrphanedDownloads())
+      this.cleanupStaleSessions()
+        .then(() => this.cleanOrphanedDownloads())
+        .catch((error) => {
+          Log.warn(`Cleanup run failed: ${error}`)
+        })
     }, 5000)
   }
 
@@ -778,7 +798,7 @@ export default class WebSocketHandler {
         this.closeSessionClients(session, 1001, 'Server shutting down')
 
         if (session.lockRefreshTimer) {
-          clearInterval(session.lockRefreshTimer)
+          session.lockRefreshTimer.stop()
           session.lockRefreshTimer = undefined
         }
 

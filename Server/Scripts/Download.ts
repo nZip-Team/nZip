@@ -57,11 +57,12 @@ function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, stat
   } else if (state === 'error') {
     Container.style.opacity = '1'
     Status.style.animation = ''
+    Status.style.borderColor = '#ff4444'
     Status.style.backgroundColor = '#ff4444'
   }
 }
 
-const image_cover = document.getElementById('image-cover') as HTMLDivElement
+const image_cover = document.getElementById('image-cover') as HTMLImageElement
 const step_connect_container = document.getElementById('step-connect-container') as HTMLDivElement
 const step_connect_status = document.getElementById('step-connect-status') as HTMLDivElement
 const step_download_container = document.getElementById('step-download-container') as HTMLDivElement
@@ -71,30 +72,91 @@ const step_pack_status = document.getElementById('step-pack-status') as HTMLDivE
 const step_finish_container = document.getElementById('step-finish-container') as HTMLDivElement
 const step_finish_status = document.getElementById('step-finish-status') as HTMLDivElement
 const progress_text = document.getElementById('progress-text') as HTMLHeadingElement
-const progress_result = document.getElementById('progress-result') as HTMLLinkElement
+const progress_result = document.getElementById('progress-result') as HTMLAnchorElement
 const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 
-const socket = new WebSocket(window.location.href.replace(/\/g\//, '/ws/g/'))
-let _receivedAnyMessage = false
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const wsPath = window.location.pathname.replace(/^\/g\//, '/ws/g/')
+const socket = new WebSocket(`${wsProtocol}//${window.location.host}${wsPath}${window.location.search}`)
+socket.binaryType = 'arraybuffer'
+
+let hasOpened = false
+let hasReceivedAnyMessage = false
+let hasTerminalState = false
+let step_download: boolean = false
+let step_pack: boolean = false
+let startTime = 0
+
+function setErrorState(message: string, stage: 'connect' | 'download' | 'pack'): void {
+  if (hasTerminalState) {
+    return
+  }
+
+  if (stage === 'connect') {
+    statusAnimation(step_connect_container, step_connect_status, 'error')
+  } else if (stage === 'download') {
+    statusAnimation(step_download_container, step_download_status, 'error')
+    step_download = false
+  } else {
+    if (step_download) {
+      statusAnimation(step_download_container, step_download_status, 'success')
+      step_download = false
+    }
+
+    statusAnimation(step_pack_container, step_pack_status, 'error')
+    step_pack = false
+  }
+
+  progress_text.textContent = message
+  progress_text.style.color = '#ff4444'
+  progress_result.style.opacity = '0'
+  hasTerminalState = true
+}
+
+async function toBuffer(data: Blob | ArrayBuffer | string): Promise<Uint8Array | null> {
+  if (typeof data === 'string') {
+    return new TextEncoder().encode(data)
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data)
+  }
+
+  if (data instanceof Blob) {
+    return new Uint8Array(await data.arrayBuffer())
+  }
+
+  return null
+}
 
 socket.addEventListener('open', () => {
-  const startTime = Date.now()
+  hasOpened = true
+  startTime = Date.now()
 
   step_connect_status.style.animation = ''
   step_connect_status.style.width = '0.75rem'
   step_connect_status.style.backgroundColor = 'var(--text_color)'
 
-  progress_text.innerHTML = '10%'
+  progress_text.textContent = '10%'
+  progress_text.style.color = 'var(--text_color)'
   progress_bar.style.width = '10%'
+})
 
-  let step_download: boolean = false
-  let step_pack: boolean = false
+socket.addEventListener('message', async (event) => {
+  if (hasTerminalState) {
+    return
+  }
 
-  socket.addEventListener('message', async (event) => {
-    _receivedAnyMessage = true
-    const raw = await event.data.arrayBuffer()
-    const buffer = new Uint8Array(raw)
-    const view = new DataView(raw)
+  try {
+    const buffer = await toBuffer(event.data)
+    if (!buffer || buffer.length === 0) {
+      setErrorState('Unexpected empty response from server', hasOpened ? 'download' : 'connect')
+      socket.close()
+      return
+    }
+
+    hasReceivedAnyMessage = true
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 
     /**
      * 0x00 Download progress
@@ -105,7 +167,12 @@ socket.addEventListener('open', () => {
      */
 
     if (buffer[0] === 0x00) {
-      // Download progress
+      if (buffer.length < 5) {
+        setErrorState('Malformed download progress message', 'download')
+        socket.close()
+        return
+      }
+
       if (!step_download) {
         statusAnimation(step_download_container, step_download_status, 'loading')
         step_download = true
@@ -114,22 +181,23 @@ socket.addEventListener('open', () => {
       const completed = view.getUint16(1)
       const total = view.getUint16(3)
 
-      progress_text.innerHTML = `${Math.round(10 + (80 / total) * completed)}% (${completed} / ${total})`
-      progress_bar.style.width = `${10 + (80 / total) * completed}%`
-    } else if (buffer[0] === 0x01) {
-      // Download error
-      if (step_download) {
-        statusAnimation(step_download_container, step_download_status, 'error')
-        step_download = false
+      if (total === 0) {
+        setErrorState('Malformed download progress message', 'download')
+        socket.close()
+        return
       }
 
-      const errorMessage = new TextDecoder().decode(buffer.slice(1))
-      progress_text.innerHTML = errorMessage || 'Download failed'
-      progress_text.style.color = '#ff4444'
-      
+      const progress = 10 + (80 / total) * completed
+      progress_text.textContent = `${Math.round(progress)}% (${completed} / ${total})`
+      progress_bar.style.width = `${Math.min(90, progress)}%`
+    } else if (buffer[0] === 0x01) {
+      statusAnimation(step_download_container, step_download_status, 'error')
+      step_download = false
+
+      const errorMessage = new TextDecoder().decode(buffer.slice(1)).trim()
+      setErrorState(errorMessage || 'Download failed', 'download')
       socket.close()
     } else if (buffer[0] === 0x10) {
-      // Pack progress
       if (step_download) {
         statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
@@ -140,26 +208,21 @@ socket.addEventListener('open', () => {
         step_pack = true
       }
 
-      progress_text.innerHTML = '90%'
+      progress_text.textContent = '90%'
       progress_bar.style.width = '90%'
     } else if (buffer[0] === 0x11) {
-      // Pack error
       if (step_download) {
         statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
       }
-      if (step_pack) {
-        statusAnimation(step_pack_container, step_pack_status, 'error')
-        step_pack = false
-      }
 
-      const errorMessage = new TextDecoder().decode(buffer.slice(1))
-      progress_text.innerHTML = errorMessage || 'Pack failed'
-      progress_text.style.color = '#ff4444'
-      
+      statusAnimation(step_pack_container, step_pack_status, 'error')
+      step_pack = false
+
+      const errorMessage = new TextDecoder().decode(buffer.slice(1)).trim()
+      setErrorState(errorMessage || 'Pack failed', 'pack')
       socket.close()
     } else if (buffer[0] === 0x20) {
-      // Download link
       if (step_download) {
         statusAnimation(step_download_container, step_download_status, 'success')
         step_download = false
@@ -171,33 +234,59 @@ socket.addEventListener('open', () => {
 
       statusAnimation(step_finish_container, step_finish_status, 'success')
 
-      const url = new TextDecoder().decode(buffer.slice(1))
-      const elapsedText = formatElapsedTime(startTime)
+      const url = new TextDecoder().decode(buffer.slice(1)).trim()
+      if (!url) {
+        setErrorState('Missing download link from server', 'pack')
+        socket.close()
+        return
+      }
 
-      progress_text.innerHTML = `100% (${elapsedText})`
+      const elapsedText = formatElapsedTime(startTime)
+      progress_text.textContent = `100% (${elapsedText})`
       progress_result.href = url
       progress_result.style.opacity = '1'
       progress_bar.style.width = '100%'
+      hasTerminalState = true
 
       const a = document.createElement('a')
       a.href = url
       a.click()
+    } else {
+      const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
+      setErrorState('Unexpected response from server', stage)
+      socket.close()
     }
-  })
+  } catch {
+    const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
+    setErrorState('Failed to parse server response', stage)
+    socket.close()
+  }
+})
 
-  socket.addEventListener('error', () => {
-    statusAnimation(step_connect_container, step_connect_status, 'error')
-    progress_text.innerHTML = 'Connection failed or rate limited'
-    progress_text.style.color = '#ff4444'
-  })
+socket.addEventListener('error', () => {
+  if (hasTerminalState) {
+    return
+  }
 
-  socket.addEventListener('close', () => {
-    if (!_receivedAnyMessage) {
-      statusAnimation(step_connect_container, step_connect_status, 'error')
-      progress_text.innerHTML = 'Server busy or rate limited. Try again later.'
-      progress_text.style.color = '#ff4444'
-    }
-  })
+  const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
+  const message = hasOpened
+    ? 'Connection lost before completion. Please try again.'
+    : 'Connection failed or rate limited'
+  setErrorState(message, stage)
+})
+
+socket.addEventListener('close', () => {
+  if (hasTerminalState) {
+    return
+  }
+
+  if (!hasOpened || !hasReceivedAnyMessage) {
+    setErrorState('Server busy or rate limited. Try again later.', 'connect')
+    return
+  }
+
+  const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
+  setErrorState('Connection closed before completion. Please try again.', stage)
 })
 
 let blurred: boolean = true
