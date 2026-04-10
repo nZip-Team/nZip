@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.13.4",
+  "version": "1.13.5",
   "type": "module",
   "scripts": {
     "start": "bun Main.ts",
@@ -11,6 +11,7 @@
     "build:core": "bun Scripts/build-core.ts",
     "build:docker": "bun Scripts/build-docker.ts",
     "dev:docker": "docker compose -f compose.dev.yml up --build",
+    "typecheck": "bun x tsc --noEmit",
     "prettier": "prettier --write ."
   },
   "dependencies": {

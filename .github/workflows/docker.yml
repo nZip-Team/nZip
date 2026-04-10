@@ -1,6 +1,9 @@
 name: Release Docker Image
 
 on:
+  workflow_run:
+    workflows: [Release nZip]
+    types: [completed]
   release:
     types: [published]
   workflow_dispatch:
@@ -12,10 +15,13 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
