@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   check:
@@ -34,3 +34,19 @@ jobs:
 
       - name: Build core
         run: bun run build:core
+
+      - name: Trigger Release workflow
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release ')
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'run-release',
+              client_payload: {
+                sha: context.sha,
+                ref: context.ref,
+                message: context.payload.head_commit?.message || ''
+              }
+            })
