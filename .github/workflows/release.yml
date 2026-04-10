@@ -1,9 +1,9 @@
 name: Release nZip
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -12,13 +12,14 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release ')
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Parse release commit message
         id: parse_release
@@ -26,11 +27,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
-          else
-            COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
-          fi
+          COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
 
           # Use only the first line to avoid body text affecting the parser.
           COMMIT_MESSAGE="$(echo "$COMMIT_MESSAGE" | tr -d '\r' | head -n1)"
