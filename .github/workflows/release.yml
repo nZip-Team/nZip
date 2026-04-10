@@ -52,6 +52,7 @@ jobs:
           fi
 
       - name: Sync package version
+        id: sync_package
         if: steps.parse_release.outputs.matched == 'true'
         shell: bash
         env:
@@ -60,29 +61,40 @@ jobs:
         run: |
           set -euo pipefail
 
+          TARGET_BRANCH="${TARGET_REF#refs/heads/}"
+          echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+
           CURRENT_VERSION="$(node -e "console.log(require('./package.json').version)")"
           if [[ "$CURRENT_VERSION" == "$RELEASE_VERSION" ]]; then
             echo "package.json version already matches $RELEASE_VERSION"
+            echo "bump_needed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "Updating package.json version from $CURRENT_VERSION to $RELEASE_VERSION"
 
           node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.env.RELEASE_VERSION; fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');"
+          echo "bump_needed=true" >> "$GITHUB_OUTPUT"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Commit and push package bump
+        id: commit_bump
+        if: steps.parse_release.outputs.matched == 'true' && steps.sync_package.outputs.bump_needed == 'true'
+        uses: suzuki-shunsuke/commit-action@f12e2d628a4ab72dcefe7890ae07e8dbf1e201b9 # v0.1.1
+        with:
+          branch: ${{ steps.sync_package.outputs.target_branch }}
+          files: |
+            package.json
+          commit_message: Bump version to ${{ steps.parse_release.outputs.version }}
+          fail_on_self_push: false
 
-          git add package.json
-          if git diff --cached --quiet; then
-            echo "No package.json changes to commit"
-            exit 0
-          fi
+      - name: Checkout bumped commit
+        if: steps.commit_bump.outputs.pushed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          git commit -m "Bump version to $RELEASE_VERSION"
-
-          TARGET_BRANCH="${TARGET_REF#refs/heads/}"
-          git push origin "HEAD:${TARGET_BRANCH}"
+          git fetch origin "${{ steps.sync_package.outputs.target_branch }}"
+          git checkout "${{ steps.commit_bump.outputs.sha }}"
 
       - name: Check whether tag already exists
         id: tag_check
