@@ -87,15 +87,6 @@ jobs:
           commit_message: Bump version to ${{ steps.parse_release.outputs.version }}
           fail_on_self_push: false
 
-      - name: Checkout bumped commit
-        if: steps.commit_bump.outputs.pushed == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git fetch origin "${{ steps.sync_package.outputs.target_branch }}"
-          git checkout "${{ steps.commit_bump.outputs.sha }}"
-
       - name: Check whether tag already exists
         id: tag_check
         if: steps.parse_release.outputs.matched == 'true'
@@ -117,4 +108,5 @@ jobs:
         with:
           tag_name: ${{ steps.parse_release.outputs.tag }}
           name: ${{ steps.parse_release.outputs.title }}
+          target_commitish: ${{ steps.commit_bump.outputs.sha || github.event.client_payload.sha || github.sha }}
           generate_release_notes: true
