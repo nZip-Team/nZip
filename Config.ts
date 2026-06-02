@@ -18,7 +18,7 @@ export default {
     })(),
 
   concurrentImageDownloads: parseInt(process.env['CONCURRENT_IMAGE_DOWNLOADS'] || '16', 10),
-  rateLimit: parseInt(process.env['RATE_LIMIT'] || '20', 10),
+  rateLimit: parseInt(process.env['RATE_LIMIT'] || '10', 10),
 
   analytics: process.env['ANALYTICS'] || '',
 

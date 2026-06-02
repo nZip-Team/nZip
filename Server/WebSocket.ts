@@ -2,10 +2,10 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 
-import nhget from './Modules/nhget'
-import Log from './Modules/Log'
+import nh from './Tools/nh'
+import Log from './Tools/Log'
 import type { DownloadResult, IDownloadManager, ISessionStore } from './Modules/Core'
-import { startInterval, type IntervalHandle } from './Modules/Interval'
+import { startInterval, type IntervalHandle } from './Tools/Interval'
 
 import Config from '../Config'
 
@@ -40,7 +40,7 @@ export default class WebSocketHandler {
   private static readonly LOCK_REFRESH_INTERVAL_MS = 30000
   private static readonly FAILED_SESSION_TIMEOUT_MS = 180000
   private static readonly COMPLETED_SESSION_IDLE_TIMEOUT_MS = 300000
-  private nh: nhget
+  private nh: nh
   private imageHost: string
   private downloadManager: IDownloadManager
   private sessions: Map<string, DownloadSession>
@@ -51,7 +51,7 @@ export default class WebSocketHandler {
   private cleanupCron?: Bun.CronJob
   private initialCleanupTimer?: ReturnType<typeof setTimeout>
 
-  constructor(nh: nhget, downloadDir: string, sessionStore: ISessionStore, downloadManager: IDownloadManager) {
+  constructor(nh: nh, downloadDir: string, sessionStore: ISessionStore, downloadManager: IDownloadManager) {
     this.nh = nh
     this.imageHost = Config.imageHost
     this.concurrentImageDownloads = Config.concurrentImageDownloads

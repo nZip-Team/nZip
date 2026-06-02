@@ -7,14 +7,15 @@ import { languageDetector } from 'hono/language'
 import fs from 'fs'
 import path from 'path'
 
+import WebSocketHandler from './WebSocket'
+
 import Config from '../Config'
 
-import nhget from './Modules/nhget'
-import Log from './Modules/Log'
+import NH from './Tools/nh'
+import RateLimiter from './Tools/RateLimiter'
+import Log from './Tools/Log'
 
 import Pages, { type PageName } from './Modules/Pages'
-import WebSocketHandler from './WebSocket'
-import RateLimiter from './RateLimiter'
 import Languages from './Modules/Language'
 import Scripts from './Modules/Scripts'
 import { Core } from './Modules/Core'
@@ -48,9 +49,8 @@ if (!fs.existsSync(downloadDir)) {
  * Start the server
  */
 export default async (): Promise<() => Promise<void>> => {
-  const nh = new nhget({
-    endpoint: `${Config.apiHost}/api/v2/galleries/`,
-    imageEndpoint: `${Config.imageHost}/galleries/`
+  const nh = new NH({
+    endpoint: Config.apiHost
   })
 
   const core = new Core()

@@ -5,8 +5,8 @@
 import path from 'path'
 import fs from 'fs'
 import { spawn, type ChildProcess } from 'node:child_process'
-import Log from './Log'
-import { startInterval } from './Interval'
+import Log from '../Tools/Log'
+import { startInterval } from '../Tools/Interval'
 import Config from '../../Config'
 
 export interface DownloadConfig {

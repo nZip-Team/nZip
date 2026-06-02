@@ -1,7 +1,7 @@
 import fs, { existsSync, watch, type FSWatcher } from 'fs'
 import path, { win32, posix } from 'path'
 
-import Log from './Log'
+import Log from '../Tools/Log'
 
 type ScriptManifest = Record<string, string>
 

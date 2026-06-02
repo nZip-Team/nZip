@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "child_process"
 import { existsSync } from "fs"
 
-import Log from "./Server/Modules/Log"
+import Log from "./Server/Tools/Log"
 import Scripts from "./Server/Modules/Scripts"
 
 await Scripts.bundle()

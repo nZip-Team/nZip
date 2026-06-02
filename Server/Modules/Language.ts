@@ -1,7 +1,7 @@
 import fs, { existsSync, watch, type FSWatcher } from 'fs'
 import path from 'path'
 
-import Log from './Log'
+import Log from '../Tools/Log'
 
 export interface LanguageData {
   language: string

@@ -2,7 +2,7 @@ import path from 'path'
 import { existsSync, watch, type FSWatcher } from 'fs'
 import type { JSX } from 'hono/jsx/jsx-runtime'
 
-import Log from './Log'
+import Log from '../Tools/Log'
 import Frame from './Frame'
 
 import _Home from '../../App/Pages/Home'

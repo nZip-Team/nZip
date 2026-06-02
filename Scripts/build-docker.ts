@@ -1,7 +1,7 @@
 import { $ } from 'bun'
 import { readFile } from 'fs/promises'
 import path from 'path'
-import Log from '../Server/Modules/Log'
+import Log from '../Server/Tools/Log'
 
 async function getPackageVersion(): Promise<string> {
   const packageJsonPath = path.join(process.cwd(), 'package.json')
