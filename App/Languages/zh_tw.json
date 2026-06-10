@@ -16,7 +16,7 @@
   "Download": {
     "Connecting to the server...": "正在連接伺服器...",
     "Downloading the images...": "正在下載圖片...",
-    "Packing the images...": "正在打包圖片...",
+    "Preparing for ZIP...": "正在準備 ZIP...",
     "Finish!": "完成！",
     "Download": "下載"
   },

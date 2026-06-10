@@ -2,7 +2,11 @@ module nzip-core
 
 go 1.26.0
 
-require modernc.org/sqlite v1.46.1
+require (
+	github.com/phpdave11/gofpdf v1.4.3
+	golang.org/x/image v0.33.0
+	modernc.org/sqlite v1.46.1
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

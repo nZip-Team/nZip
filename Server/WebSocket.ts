@@ -17,6 +17,12 @@ import type { WSEvents } from 'hono/ws'
 import type { ServerWebSocket } from 'bun'
 
 type StatusCacheKey = 'download' | 'pack' | 'link'
+type ArchiveFormat = 'zip' | 'cbz' | 'pdf' | 'epub'
+type ClientCommand =
+  | { type: 'start' }
+  | { type: 'prepare'; format: ArchiveFormat }
+
+type PrepareStatus = 'started' | 'ready' | 'error'
 
 interface DownloadSession {
   id: string
@@ -50,6 +56,7 @@ export default class WebSocketHandler {
   private processID: string
   private cleanupCron?: Bun.CronJob
   private initialCleanupTimer?: ReturnType<typeof setTimeout>
+  private archiveGeneration: Map<string, Promise<void>>
 
   constructor(nh: nh, downloadDir: string, sessionStore: ISessionStore, downloadManager: IDownloadManager) {
     this.nh = nh
@@ -62,6 +69,7 @@ export default class WebSocketHandler {
     this.downloadDir = downloadDir
 
     this.processID = `${os.hostname()}-${process.pid}-${Date.now()}`
+    this.archiveGeneration = new Map()
 
     this.startOrphanedDownloadsCleanup()
   }
@@ -187,10 +195,17 @@ export default class WebSocketHandler {
     const wsRef: { current: ServerWebSocket | null } = { current: null }
 
     return {
-      onMessage: () => {
-        // Do not expect any messages from the client
-      },
+      onMessage: async (evt, ws) => {
+        const socket = ws.raw
+        if (!socket) {
+          ws.close(1011, 'Internal Server Error')
+          return
+        }
 
+        const session = this.sessions.get(hash) ?? await this.getSession(id, hash)
+        await this.handleClientMessage(session, socket, evt.data, id, ip)
+      },
+ 
       onOpen: async (_evt, ws) => {
         const socket = ws.raw
         if (!socket) {
@@ -212,25 +227,7 @@ export default class WebSocketHandler {
         }
 
         await this.sendSnapshotToClient(session, socket)
-
-        if (!session.downloadCompleted && !session.downloadPromise) {
-          const lockAcquired = await this.sessionStore.tryAcquireLock(hash, this.processID)
-
-          if (lockAcquired) {
-            Log.info(`WS Flow Start: ${id} - ${ip} (lock acquired by ${this.processID})`)
-            session.downloadPromise = this.startDownloadFlow(id, session, ip).finally(async () => {
-              session.downloadPromise = undefined
-              if (session.downloadCompleted) {
-                await this.sessionStore.update(session.hash, { downloadCompleted: true })
-                Log.info(`WS Lock Release: ${id} - downloadCompleted saved to store`)
-              }
-              await this.sessionStore.releaseLock(hash, this.processID)
-              Log.info(`WS Lock Released: ${id} - by ${this.processID}`)
-            })
-          } else {
-            Log.info(`WS Flow Waiting: ${id} - ${ip} (another instance is downloading)`)
-          }
-        } else if (session.downloadPromise) {
+        if (session.downloadPromise) {
           Log.info(`WS Flow In Progress: ${id} - ${ip}`)
         } else if (session.downloadCompleted) {
           Log.info(`WS Flow Replay: ${id} - ${ip}`)
@@ -369,8 +366,141 @@ export default class WebSocketHandler {
 
     if (session.lastLinkBuffer) {
       ws.send(session.lastLinkBuffer)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      ws.close()
+    }
+  }
+
+  private parseClientCommand(data: string): ClientCommand | null {
+    try {
+      const parsed = JSON.parse(data)
+      if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
+        return null
+      }
+
+      if (parsed.type === 'start') {
+        return { type: 'start' }
+      }
+
+      if (parsed.type === 'prepare' && typeof parsed.format === 'string' && ['zip', 'cbz', 'pdf', 'epub'].includes(parsed.format)) {
+        return { type: 'prepare', format: parsed.format as ArchiveFormat }
+      }
+    } catch {
+      return null
+    }
+
+    return null
+  }
+
+  private sendPrepareStatus(ws: ServerWebSocket, format: string, status: PrepareStatus, error?: string): void {
+    if (ws.readyState !== 1) {
+      return
+    }
+
+    const payload = JSON.stringify({
+      type: 'prepare',
+      format,
+      status,
+      ...(error ? { error } : {})
+    })
+
+    try {
+      ws.send(payload)
+    } catch (sendError) {
+      Log.warn(`Failed to send prepare status for ${format}: ${sendError}`)
+    }
+  }
+
+  private async handleClientMessage(session: DownloadSession, ws: ServerWebSocket, rawData: unknown, id: string, ip: string): Promise<void> {
+    const data = typeof rawData === 'string'
+      ? rawData
+      : rawData instanceof ArrayBuffer || rawData instanceof SharedArrayBuffer
+        ? Buffer.from(rawData).toString('utf8')
+        : Buffer.isBuffer(rawData)
+          ? rawData.toString('utf8')
+          : String(rawData ?? '')
+
+    const command = this.parseClientCommand(data)
+    if (!command) {
+      Log.warn(`WS Invalid Command: ${id} - ${ip}`)
+      return
+    }
+
+    session.lastAccessTime = Date.now()
+    await this.sessionStore.touch(session.hash)
+
+    if (command.type === 'start') {
+      await this.maybeStartDownloadFlow(id, session, ip)
+      return
+    }
+
+    await this.prepareArchiveFormat(session, ws, command.format)
+  }
+
+  private async maybeStartDownloadFlow(id: string, session: DownloadSession, ip: string): Promise<void> {
+    if (session.downloadCompleted || session.downloadPromise) {
+      return
+    }
+
+    const lockAcquired = await this.sessionStore.tryAcquireLock(session.hash, this.processID)
+
+    if (!lockAcquired) {
+      Log.info(`WS Flow Waiting: ${id} - ${ip} (another instance is downloading)`)
+      return
+    }
+
+    Log.info(`WS Flow Start: ${id} - ${ip} (lock acquired by ${this.processID})`)
+    session.downloadPromise = this.startDownloadFlow(id, session, ip).finally(async () => {
+      session.downloadPromise = undefined
+      if (session.downloadCompleted) {
+        await this.sessionStore.update(session.hash, { downloadCompleted: true })
+        Log.info(`WS Lock Release: ${id} - downloadCompleted saved to store`)
+      }
+      await this.sessionStore.releaseLock(session.hash, this.processID)
+      Log.info(`WS Lock Released: ${id} - by ${this.processID}`)
+    })
+  }
+
+  private async prepareArchiveFormat(session: DownloadSession, ws: ServerWebSocket, format: ArchiveFormat): Promise<void> {
+    if (!session.downloadCompleted || !session.filename) {
+      this.sendPrepareStatus(ws, format, 'error', 'Download is not ready yet')
+      return
+    }
+
+    const targetFile = session.filename.replace(/\.zip$/i, `.${format}`)
+    const targetPath = path.join(this.downloadDir, session.hash, targetFile)
+
+    if (fs.existsSync(targetPath)) {
+      this.sendPrepareStatus(ws, format, 'ready')
+      return
+    }
+
+    const generationKey = `${session.hash}:${targetFile}`
+    let pending = this.archiveGeneration.get(generationKey)
+
+    try {
+      if (!pending) {
+        this.sendPrepareStatus(ws, format, 'started')
+        pending = this.downloadManager.packFormat(path.join(this.downloadDir, session.hash), session.filename, session.hash, format, [])
+        this.archiveGeneration.set(generationKey, pending)
+        pending.finally(() => {
+          this.archiveGeneration.delete(generationKey)
+        })
+      } else {
+        this.sendPrepareStatus(ws, format, 'started')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      Log.warn(`WS Prepare Setup Failed: ${session.id} - ${format} - ${message}`)
+      this.sendPrepareStatus(ws, format, 'error', message)
+      return
+    }
+
+    try {
+      await pending
+      this.sendPrepareStatus(ws, format, 'ready')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      Log.warn(`WS Prepare Failed: ${session.id} - ${format} - ${message}`)
+      this.sendPrepareStatus(ws, format, 'error', message)
     }
   }
 
@@ -547,7 +677,6 @@ export default class WebSocketHandler {
         await this.sessionStore.update(session.hash, { downloadCompleted: true })
         Log.info(`WS Download End: ${response.id} - ${ip}`)
         await this.broadcastDownloadLink(session, filename)
-        this.closeSessionClients(session)
         this.downloadManager.cleanTempFiles(downloadDir, filename)
       } else {
         Log.error(`Failed to download gallery: ${response.id}`)

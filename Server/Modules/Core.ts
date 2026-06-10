@@ -31,6 +31,7 @@ export interface IDownloadManager {
   hasActiveDownload(hash: string): boolean
   stopAll(): void
   cleanTempFiles(downloadDir: string, filename: string): void
+  packFormat(downloadDir: string, filename: string, hash: string, format: string, images: string[]): Promise<void>
 }
 
 export interface SharedSessionData {
@@ -581,6 +582,10 @@ export class CoreDownloadManager implements IDownloadManager {
     this.backend
       .call({ cmd: 'download.cleanTempFiles', downloadDir, filename })
       .catch((err) => Log.warn(`Core: cleanTempFiles error: ${err}`))
+  }
+
+  async packFormat(downloadDir: string, filename: string, hash: string, format: string, images: string[]): Promise<void> {
+    await this.backend.call({ cmd: 'download.packFormat', downloadDir, filename, hash, format, images })
   }
 }
 

@@ -78,9 +78,9 @@ func (dm *DownloadManager) Run(cfg DownloadConfig) DownloadResult {
 		return DownloadResult{ErrorCode: 0x01}
 	}
 
-	// Phase 2: pack into zip.
+	// Phase 2: pack into the downloadable archives.
 	cfg.OnPackStart()
-	if err := packZip(ctx, cfg); err != nil {
+	if err := packArchives(ctx, cfg); err != nil {
 		logErr("Pack %s: %v", cfg.Hash, err)
 		return DownloadResult{ErrorCode: 0x11}
 	}
@@ -120,14 +120,15 @@ func (dm *DownloadManager) HasActive(hash string) bool {
 	return ok
 }
 
-// CleanTempFiles removes all files in downloadDir except filename.
+// CleanTempFiles removes leftover temporary pack files while preserving the
+// downloaded images and completed archives for reuse.
 func CleanTempFiles(downloadDir, filename string) {
 	entries, err := os.ReadDir(downloadDir)
 	if err != nil {
 		return
 	}
 	for _, e := range entries {
-		if e.Name() != filename {
+		if strings.HasSuffix(e.Name(), ".tmp") {
 			_ = os.Remove(filepath.Join(downloadDir, e.Name()))
 		}
 	}

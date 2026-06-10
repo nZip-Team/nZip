@@ -34,17 +34,23 @@ export default (args: { id: string, title: string, cover: string, t: (key: strin
                   </div>
                   <div id="step-pack-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', opacity: '0.25', transition: 'opacity 0.5s' }}>
                     <div id="step-pack-status" style={{ border: '0.1rem solid var(--text_color)', borderRadius: '100%', width: '0.75rem', height: '0.75rem', marginRight: '1rem' }}></div>
-                    <h1 className="text" style={{ fontSize: '1.25rem' }}>{t('Packing the images...')}</h1>
+                    <h1 id="step-pack-text" className="text" style={{ fontSize: '1.25rem' }}>{t('Preparing for ZIP...')}</h1>
                   </div>
                   <div id="step-finish-container" style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem', opacity: '0.25', transition: 'opacity 0.5s' }}>
                     <div id="step-finish-status" style={{ border: '0.1rem solid var(--text_color)', borderRadius: '100%', width: '0.75rem', height: '0.75rem', marginRight: '1rem' }}></div>
-                    <h1 className="text" style={{ fontSize: '1.25rem' }}>{t('Finish!')}</h1>
+                    <h1 id="step-finish-text" className="text" style={{ fontSize: '1.25rem' }}>{t('Finish!')}</h1>
                   </div>
                 </div>
                 <div style={{ width: 'calc(75% + (5rem - 2vw))' }}>
-                  <div style={{ display: 'flex', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <h1 id="progress-text" className="text" style={{ flex: '1', fontSize: '1.25rem' }}>0%</h1>
-                    <a id="progress-result" className="text" style={{ fontSize: '1.25rem', transition: 'opacity 0.5s', opacity: '0' }}>{t('Download')}</a>
+                    <select id="progress-format" className="text" style={{ backgroundColor: 'var(--background_color)', color: 'var(--text_color)', border: '0.1rem solid var(--text_color)', borderRadius: '0.25rem', fontSize: '1rem', padding: '0.35rem 0.5rem' }}>
+                      <option value="zip">ZIP</option>
+                      <option value="cbz">CBZ</option>
+                      <option value="pdf">PDF</option>
+                      <option value="epub">EPUB</option>
+                    </select>
+                    <a id="progress-result" className="text" aria-disabled="true" style={{ fontSize: '1.25rem', transition: 'opacity 0.5s, color 0.5s', opacity: '0.45', color: 'color-mix(in srgb, var(--text_color), var(--background_color) 45%)', pointerEvents: 'none', cursor: 'default' }}>{t('Download')}</a>
                   </div>
                   <div style={{ backgroundColor: 'color-mix(in srgb, var(--text_color), var(--background_color) 85%)', borderRadius: '1rem', width: '100%', height: '0.3rem', overflow: 'hidden' }}>
                     <div id="progress-bar" style={{ backgroundColor: 'var(--text_color)', width: '0%', height: '100%', transition: 'width 0.5s' }}></div>

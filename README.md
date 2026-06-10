@@ -1,6 +1,6 @@
 # nZip
 
-nZip is a convenient tool for downloading doujinshi from nhentai.net as a zip archive.
+nZip is a convenient tool for downloading doujinshi from nhentai.net as an archive.
 
 > [!WARNING]
 > This project is not affiliated with or endorsed by nhentai.net. Please use it responsibly.
@@ -10,23 +10,24 @@ nZip is a convenient tool for downloading doujinshi from nhentai.net as a zip ar
 
 1. **Modify the URL**: To download a doujinshi, simply replace `.net` with `.zip` in the URL. For example, to download the doujinshi at `https://nhentai.net/g/228922`, you would navigate to `https://nhentai.zip/g/228922`.
 
-2. **Direct ID Input**: Alternatively, you can enter the doujinshi ID directly on the nZip homepage to generate your zip archive.
+2. **Direct ID Input**: Alternatively, you can enter the doujinshi ID directly on the nZip homepage to generate your archive.
 
-3. **Download the Archive**: Once you have entered the URL or ID, it will automatically fetch the images and download the archive.
+3. **Download the Archive**: Once you have entered the URL or ID, it will automatically fetch the images and prepare the archive. nZip supports `zip`, `cbz`, `pdf`, and `epub` downloads.
 
 ## How nZip Works?
 
-nZip makes a downloadable zip file from a gallery code you provide. Here is the simple flow:
+nZip makes a downloadable archive from a gallery code you provide. Here is the simple flow:
 
 - You enter a code to request a download.
-- If a ready-made zip already exists for that code, nZip returns the download link right away.
+- If a ready-made archive already exists for that code, nZip returns the download link right away.
 - If not, nZip fetches the gallery images, downloads them, and packs them into a zip file.
 - While that work is happening you see progress updates in your browser so you know what's happening.
 - When the zip is ready, nZip gives you a link to download it.
-- The zip is kept temporarily on the server and removed after a short time to save space.
+- You can also choose `cbz`, `pdf`, or `epub` from the download page.
+- The archive is kept temporarily on the server and removed after a short time to save space.
 - If something goes wrong, nZip shows a clear error message and you can try again.
 
-That's it - enter a code, watch progress, and download the zip.
+That's it - enter a code, watch progress, and download the archive in the format you want.
 
 ## Running the Project
 

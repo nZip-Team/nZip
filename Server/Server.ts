@@ -14,6 +14,7 @@ import Config from '../Config'
 import NH from './Tools/nh'
 import RateLimiter from './Tools/RateLimiter'
 import Log from './Tools/Log'
+import { isLoopbackAddress, isTrustedProxy, loadTrustedProxies, parseIPAddress } from './Tools/TrustedProxy'
 
 import Pages, { type PageName } from './Modules/Pages'
 import Languages from './Modules/Language'
@@ -29,6 +30,14 @@ let filePath = './App'
 
 const CacheStore = new Map<string, string>()
 const CACHE_MAX_SIZE = 200
+
+const trustedProxyRules = loadTrustedProxies(Config.trustedProxies, (entry, reason) => {
+  Log.warn(`Ignoring invalid TRUSTED_PROXIES entry "${entry}": ${reason}`)
+})
+
+if (Config.trustXForwardedFor && trustedProxyRules.length === 0) {
+  Log.warn('TRUST_X_FORWARDED_FOR is enabled, but TRUSTED_PROXIES is empty or invalid; X-Forwarded-For will be ignored')
+}
 
 // In development, flush all CacheStore entries for a page when it is reloaded
 if (process.env['NODE_ENV'] === 'development') {
@@ -158,6 +167,11 @@ export default async (): Promise<() => Promise<void>> => {
   })
 
   app.get('/ws/g/:id', async (c, next) => {
+    if (isLoopbackAddress(getConnInfo(c).remote.address)) {
+      await next()
+      return
+    }
+
     const ip = getIP(c)
     if (!wsRateLimiter.allow(ip)) {
       const retry = wsRateLimiter.getRetryAfterSeconds(ip) || 60
@@ -180,32 +194,36 @@ export default async (): Promise<() => Promise<void>> => {
 
       if (!filePath || !fileLoc) throw new Error('Invalid path')
 
-      if (!fileName.endsWith('.zip')) throw new Error('Invalid File')
+      const archiveContentType = getArchiveContentType(fileName)
+      if (!archiveContentType) throw new Error('Invalid File')
       if (!(await Bun.file(fileLoc).exists())) throw new Error('File does not exist')
-
-      const rangeHeader = c.req.header('Range')
-      const [start, end] = parseRangeHeader(rangeHeader)
 
       const file = Bun.file(fileLoc)
       const fileSize = file.size
-      const effectiveEnd = end === Infinity ? fileSize : Math.min(end + 1, fileSize)
+      const range = parseRangeHeader(c.req.header('Range'), fileSize)
 
       const responseHeaders: Record<string, string> = {
         'content-disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-        'content-type': 'application/zip',
+        'content-type': archiveContentType,
         'accept-ranges': 'bytes',
       }
 
-      if (rangeHeader) {
-        responseHeaders['content-range'] = `bytes ${start}-${effectiveEnd - 1}/${fileSize}`
-        responseHeaders['content-length'] = String(effectiveEnd - start)
-        return new Response(file.slice(start, effectiveEnd), { status: 206, headers: responseHeaders })
+      if (range.unsatisfiable) {
+        responseHeaders['content-range'] = `bytes */${fileSize}`
+        return new Response(null, { status: 416, headers: responseHeaders })
+      }
+
+      if (range.partial) {
+        const effectiveEnd = range.end + 1
+        responseHeaders['content-range'] = `bytes ${range.start}-${range.end}/${fileSize}`
+        responseHeaders['content-length'] = String(effectiveEnd - range.start)
+        return new Response(file.slice(range.start, effectiveEnd), { status: 206, headers: responseHeaders })
       }
 
       responseHeaders['content-length'] = String(fileSize)
       return new Response(file, { headers: responseHeaders })
     } catch {
-      const match = fileName.match(/^\[(\d+)\](.*?)\.zip$/)
+      const match = fileName.match(/^\[(\d+)\](.*?)\.(zip|cbz|pdf|epub)$/i)
       c.status(404)
       let errorMessage = ''
 
@@ -231,16 +249,43 @@ export default async (): Promise<() => Promise<void>> => {
       const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
 
       if (!filePath || !fileLoc) throw new Error('Invalid path')
-      if (!fileName.endsWith('.zip')) throw new Error('Invalid File')
+      const archiveContentType = getArchiveContentType(fileName)
+      if (!archiveContentType) throw new Error('Invalid File')
 
       const file = Bun.file(fileLoc)
       if (!(await file.exists())) throw new Error('File does not exist')
+      const range = parseRangeHeader(c.req.header('Range'), file.size)
+
+      if (range.unsatisfiable) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'content-disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+            'content-type': archiveContentType,
+            'accept-ranges': 'bytes',
+            'content-range': `bytes */${file.size}`,
+          },
+        })
+      }
+
+      if (range.partial) {
+        return new Response(null, {
+          status: 206,
+          headers: {
+            'content-disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+            'content-type': archiveContentType,
+            'accept-ranges': 'bytes',
+            'content-range': `bytes ${range.start}-${range.end}/${file.size}`,
+            'content-length': String(range.end - range.start + 1),
+          },
+        })
+      }
 
       return new Response(null, {
         status: 200,
         headers: {
           'content-disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-          'content-type': 'application/zip',
+          'content-type': archiveContentType,
           'accept-ranges': 'bytes',
           'content-length': String(file.size),
         },
@@ -378,12 +423,19 @@ export default async (): Promise<() => Promise<void>> => {
  */
 export function getIP(c: Context): string {
   try {
-    const forwardedFor = c.req.header('X-Forwarded-For')
-    if (forwardedFor) {
-      const candidate = forwardedFor.split(',')[0].trim()
-      if (/^[0-9a-fA-F:.]{1,45}$/.test(candidate)) return candidate
+    const remoteAddress = parseIPAddress(getConnInfo(c).remote.address)
+
+    if (Config.trustXForwardedFor && remoteAddress && isTrustedProxy(remoteAddress, trustedProxyRules)) {
+      const forwardedFor = c.req.header('X-Forwarded-For')
+      if (forwardedFor) {
+        const candidate = parseIPAddress(forwardedFor.split(',')[0].trim())
+        if (candidate) {
+          return candidate.normalized
+        }
+      }
     }
-    return getConnInfo(c).remote.address || 'unknown'
+
+    return remoteAddress?.normalized || 'unknown'
   } catch {
     return 'unknown'
   }
@@ -394,24 +446,73 @@ export function getIP(c: Context): string {
  * @param rangeHeader The Range header value
  * @returns A tuple containing the start and end of the range
  */
-function parseRangeHeader(rangeHeader: string | undefined): [number, number] {
-  if (!rangeHeader) return [0, Infinity]
+function parseRangeHeader(rangeHeader: string | undefined, fileSize: number): {
+  start: number
+  end: number
+  partial: boolean
+  unsatisfiable: boolean
+} {
+  const fullRange = {
+    start: 0,
+    end: Math.max(fileSize - 1, 0),
+    partial: false,
+    unsatisfiable: false,
+  }
+
+  if (!rangeHeader || fileSize <= 0) return fullRange
 
   try {
-    const rangeValue = rangeHeader.split('=')[1]
-    if (!rangeValue) return [0, Infinity]
+    const [unit, rawRange] = rangeHeader.split('=')
+    if (unit?.trim().toLowerCase() !== 'bytes' || !rawRange) return fullRange
 
-    const [startStr, endStr] = rangeValue.split('-')
-    const startNum = startStr ? parseInt(startStr, 10) : 0
-    const endNum = endStr ? parseInt(endStr, 10) : Infinity
+    const [rangeValue] = rawRange.split(',')
+    const [startStr, endStr] = rangeValue.split('-').map((part) => part.trim())
 
-    if (isNaN(startNum)) return [0, endNum]
-    if (isNaN(endNum)) return [startNum, Infinity]
+    if (!startStr && !endStr) return fullRange
 
-    return [startNum, endNum]
-  } catch (error) {
-    return [0, Infinity]
+    let start = 0
+    let end = fileSize - 1
+
+    if (!startStr) {
+      const suffixLength = parseInt(endStr, 10)
+      if (isNaN(suffixLength) || suffixLength <= 0) return fullRange
+      if (suffixLength >= fileSize) return fullRange
+      start = fileSize - suffixLength
+    } else {
+      start = parseInt(startStr, 10)
+      if (isNaN(start) || start < 0) return fullRange
+      if (start >= fileSize) {
+        return {
+          ...fullRange,
+          unsatisfiable: true,
+        }
+      }
+
+      if (endStr) {
+        end = parseInt(endStr, 10)
+        if (isNaN(end) || end < start) {
+          return {
+            ...fullRange,
+            unsatisfiable: true,
+          }
+        }
+        end = Math.min(end, fileSize - 1)
+      }
+    }
+
+    const partial = start > 0 || end < fileSize - 1
+    return { start, end, partial, unsatisfiable: false }
+  } catch {
+    return fullRange
   }
+}
+
+function getArchiveContentType(fileName: string): string | null {
+  if (fileName.endsWith('.zip')) return 'application/zip'
+  if (fileName.endsWith('.cbz')) return 'application/vnd.comicbook+zip'
+  if (fileName.endsWith('.pdf')) return 'application/pdf'
+  if (fileName.endsWith('.epub')) return 'application/epub+zip'
+  return null
 }
 
 /**
@@ -425,8 +526,13 @@ function sanitizePath(userInput: string, baseDir: string): string | null {
 
   const basePath = path.isAbsolute(baseDir) ? path.resolve(baseDir) : path.resolve(path.join(process.cwd(), baseDir))
   const fullPath = path.resolve(path.join(basePath, normalized))
+  const relative = path.relative(basePath, fullPath)
 
-  if (!fullPath.startsWith(basePath)) {
+  if (relative === '' || relative === '.') {
+    return fullPath
+  }
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     return null
   }
 

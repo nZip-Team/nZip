@@ -31,11 +31,13 @@
 //	download.stopAll
 //	download.hasActive   hash
 //	download.cleanTempFiles  downloadDir, filename
+//	download.packFormat  hash, downloadDir, filename, format, images
 //	shutdown
 package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -65,6 +67,7 @@ type Command struct {
 	Images              []string `json:"images,omitempty"`
 	DownloadDir         string   `json:"downloadDir,omitempty"`
 	Filename            string   `json:"filename,omitempty"`
+	Format              string   `json:"format,omitempty"`
 	ConcurrentDownloads int      `json:"concurrentDownloads,omitempty"`
 	Debug               bool     `json:"debug,omitempty"`
 }
@@ -342,14 +345,14 @@ func dispatch(store *SessionStore, dm *DownloadManager, cmd Command) {
 			},
 		}
 		// Run in a separate goroutine so the dispatcher stays unblocked.
-		go func() {
+		runAsyncCommand(cmd.ReqID, cmd.Cmd, func() {
 			result := dm.Run(cfg)
 			if result.Success {
 				ok(cmd.ReqID, map[string]bool{"success": true})
 			} else {
 				failCode(cmd.ReqID, result.ErrorCode)
 			}
-		}()
+		})
 
 	case "download.stop":
 		dm.Stop(cmd.Hash)
@@ -366,6 +369,20 @@ func dispatch(store *SessionStore, dm *DownloadManager, cmd Command) {
 		CleanTempFiles(cmd.DownloadDir, cmd.Filename)
 		ok(cmd.ReqID, nil)
 
+	case "download.packFormat":
+		runAsyncCommand(cmd.ReqID, cmd.Cmd, func() {
+			if err := packArchiveFormat(context.Background(), DownloadConfig{
+				Hash:        cmd.Hash,
+				Images:      cmd.Images,
+				DownloadDir: cmd.DownloadDir,
+				Filename:    cmd.Filename,
+			}, cmd.Format); err != nil {
+				fail(cmd.ReqID, err.Error())
+			} else {
+				ok(cmd.ReqID, nil)
+			}
+		})
+
 	// system commands
 	case "shutdown":
 		ok(cmd.ReqID, nil)
@@ -376,4 +393,17 @@ func dispatch(store *SessionStore, dm *DownloadManager, cmd Command) {
 	default:
 		fail(cmd.ReqID, "unknown command: "+cmd.Cmd)
 	}
+}
+
+func runAsyncCommand(reqID, cmdName string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logErr("Panic in async dispatch [%s] %s: %v", reqID, cmdName, r)
+				fail(reqID, fmt.Sprintf("internal error: %v", r))
+			}
+		}()
+
+		fn()
+	}()
 }

@@ -69,9 +69,12 @@ const step_download_container = document.getElementById('step-download-container
 const step_download_status = document.getElementById('step-download-status') as HTMLDivElement
 const step_pack_container = document.getElementById('step-pack-container') as HTMLDivElement
 const step_pack_status = document.getElementById('step-pack-status') as HTMLDivElement
+const step_pack_text = document.getElementById('step-pack-text') as HTMLHeadingElement
 const step_finish_container = document.getElementById('step-finish-container') as HTMLDivElement
 const step_finish_status = document.getElementById('step-finish-status') as HTMLDivElement
+const step_finish_text = document.getElementById('step-finish-text') as HTMLHeadingElement
 const progress_text = document.getElementById('progress-text') as HTMLHeadingElement
+const progress_format = document.getElementById('progress-format') as HTMLSelectElement
 const progress_result = document.getElementById('progress-result') as HTMLAnchorElement
 const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
 
@@ -86,6 +89,264 @@ let hasTerminalState = false
 let step_download: boolean = false
 let step_pack: boolean = false
 let startTime = 0
+let downloadBaseUrl = ''
+let completedText = ''
+let isPreparingArchive = false
+let archiveWorkflowRunning = false
+let archiveWorkflowQueued = false
+let autoDownloadRequested = false
+const validFormats = ['zip', 'cbz', 'pdf', 'epub'] as const
+const onDemandFormats = ['pdf', 'epub'] as const
+let pendingPrepare:
+  | { format: string; resolve: () => void; reject: (error: Error) => void; onStarted: () => void }
+  | null = null
+const defaultFinishText = step_finish_text.textContent || 'Finish!'
+
+function isValidFormat(format: string | null): format is typeof validFormats[number] {
+  return format !== null && validFormats.includes(format as typeof validFormats[number])
+}
+
+function isOnDemandFormat(format: string): format is typeof onDemandFormats[number] {
+  return onDemandFormats.includes(format as typeof onDemandFormats[number])
+}
+
+function getCookie(name: string): string | null {
+  const prefix = `${name}=`
+  for (const part of document.cookie.split(';')) {
+    const cookie = part.trim()
+    if (cookie.startsWith(prefix)) {
+      return decodeURIComponent(cookie.slice(prefix.length))
+    }
+  }
+  return null
+}
+
+function setCookie(name: string, value: string): void {
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`
+}
+
+function replaceArchiveExtension(url: string, format: string): string {
+  return url.replace(/\.(zip|cbz|pdf|epub)$/i, `.${format}`)
+}
+
+function updateDownloadHref(): void {
+  if (!downloadBaseUrl) {
+    return
+  }
+
+  progress_result.href = replaceArchiveExtension(downloadBaseUrl, progress_format.value)
+}
+
+function setDownloadLinkEnabled(enabled: boolean): void {
+  progress_result.style.opacity = enabled ? '1' : '0.45'
+  progress_result.style.color = enabled
+    ? 'var(--text_color)'
+    : 'color-mix(in srgb, var(--text_color), var(--background_color) 45%)'
+  progress_result.style.pointerEvents = enabled ? 'auto' : 'none'
+  progress_result.style.cursor = enabled ? 'pointer' : 'default'
+  progress_result.setAttribute('aria-disabled', enabled ? 'false' : 'true')
+}
+
+function setStepDisabled(Container: HTMLDivElement, Status: HTMLDivElement): void {
+  Container.style.opacity = '0.25'
+  Status.style.animation = ''
+  Status.style.backgroundColor = 'transparent'
+  Status.style.borderColor = 'var(--text_color)'
+}
+
+function preparePackText(format: string): string {
+  return `Preparing for ${format.toUpperCase()}...`
+}
+
+function syncPackTextToSelection(): void {
+  step_pack_text.textContent = preparePackText(progress_format.value)
+}
+
+function enterPrepareUI(format: string): void {
+  isPreparingArchive = true
+  setDownloadLinkEnabled(false)
+  step_pack_text.textContent = preparePackText(format)
+  step_finish_text.textContent = defaultFinishText
+  statusAnimation(step_pack_container, step_pack_status, 'loading')
+  setStepDisabled(step_finish_container, step_finish_status)
+  progress_text.textContent = completedText || '90%'
+  progress_text.style.color = 'var(--text_color)'
+  progress_bar.style.width = '90%'
+}
+
+function restoreCompletedUI(format?: string): void {
+  step_pack_text.textContent = format ? preparePackText(format) : preparePackText(progress_format.value)
+  step_finish_text.textContent = defaultFinishText
+  statusAnimation(step_pack_container, step_pack_status, 'success')
+  statusAnimation(step_finish_container, step_finish_status, 'success')
+  progress_text.textContent = completedText
+  progress_text.style.color = 'var(--text_color)'
+  progress_bar.style.width = '100%'
+  setDownloadLinkEnabled(true)
+  isPreparingArchive = false
+}
+
+function failPrepareUI(format: string): void {
+  step_pack_text.textContent = preparePackText(format)
+  step_finish_text.textContent = defaultFinishText
+  statusAnimation(step_pack_container, step_pack_status, 'error')
+  setStepDisabled(step_finish_container, step_finish_status)
+  progress_text.textContent = `Failed to prepare ${format.toUpperCase()}`
+  progress_text.style.color = '#ff4444'
+  progress_bar.style.width = '90%'
+  setDownloadLinkEnabled(true)
+  isPreparingArchive = false
+}
+
+function clickDownload(url: string): void {
+  const a = document.createElement('a')
+  a.href = url
+  a.click()
+}
+
+function sendSocketCommand(command: Record<string, unknown>): void {
+  if (socket.readyState !== WebSocket.OPEN) {
+    throw new Error('Connection is not open')
+  }
+  socket.send(JSON.stringify(command))
+}
+
+function handlePrepareEvent(message: { format?: string; status?: string; error?: string }): void {
+  if (!pendingPrepare || message.format !== pendingPrepare.format) {
+    return
+  }
+
+  if (message.status === 'ready') {
+    pendingPrepare.resolve()
+    pendingPrepare = null
+    return
+  }
+
+  if (message.status === 'started') {
+    pendingPrepare.onStarted()
+    return
+  }
+
+  if (message.status === 'error') {
+    pendingPrepare.reject(new Error(message.error || 'Prepare failed'))
+    pendingPrepare = null
+  }
+}
+
+async function prepareSelectedArchive(format: string): Promise<void> {
+  if (pendingPrepare) {
+    throw new Error('Another archive is already being prepared')
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    pendingPrepare = {
+      format,
+      resolve,
+      reject,
+      onStarted: () => enterPrepareUI(format)
+    }
+    try {
+      sendSocketCommand({ type: 'prepare', format })
+    } catch (error) {
+      pendingPrepare = null
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
+}
+
+const queryFormat = new URLSearchParams(window.location.search).get('format')
+const cookieFormat = getCookie('file_format')
+
+function queueArchiveWorkflow(downloadAfterReady = false): void {
+  if (!downloadBaseUrl) {
+    return
+  }
+
+  if (downloadAfterReady) {
+    autoDownloadRequested = true
+  }
+
+  archiveWorkflowQueued = true
+  if (archiveWorkflowRunning) {
+    return
+  }
+
+  archiveWorkflowRunning = true
+  void (async () => {
+    while (archiveWorkflowQueued && downloadBaseUrl) {
+      archiveWorkflowQueued = false
+
+      const selectedFormat = progress_format.value
+      updateDownloadHref()
+
+      if (isOnDemandFormat(selectedFormat)) {
+        try {
+          await prepareSelectedArchive(selectedFormat)
+          updateDownloadHref()
+          if (isPreparingArchive) {
+            restoreCompletedUI(selectedFormat)
+          }
+        } catch {
+          if (isPreparingArchive) {
+            failPrepareUI(selectedFormat)
+          }
+          autoDownloadRequested = false
+          return
+        }
+      }
+
+      if (progress_format.value !== selectedFormat) {
+        archiveWorkflowQueued = true
+        continue
+      }
+
+      if (autoDownloadRequested) {
+        clickDownload(replaceArchiveExtension(downloadBaseUrl, progress_format.value))
+        autoDownloadRequested = false
+      }
+    }
+  })().finally(() => {
+    archiveWorkflowRunning = false
+
+    if (archiveWorkflowQueued && downloadBaseUrl) {
+      queueArchiveWorkflow(autoDownloadRequested)
+    }
+  })
+}
+
+if (isValidFormat(queryFormat)) {
+  progress_format.value = queryFormat
+} else if (isValidFormat(cookieFormat)) {
+  progress_format.value = cookieFormat
+} else {
+  progress_format.value = 'zip'
+}
+
+syncPackTextToSelection()
+
+progress_format.addEventListener('change', () => {
+  setCookie('file_format', progress_format.value)
+  updateDownloadHref()
+  syncPackTextToSelection()
+
+  if (completedText) {
+    progress_text.textContent = completedText
+    progress_text.style.color = 'var(--text_color)'
+    queueArchiveWorkflow()
+  }
+})
+
+progress_result.addEventListener('click', (event) => {
+  if (!downloadBaseUrl) {
+    event.preventDefault()
+    return
+  }
+
+  event.preventDefault()
+  queueArchiveWorkflow(true)
+})
+
+setDownloadLinkEnabled(false)
 
 function setErrorState(message: string, stage: 'connect' | 'download' | 'pack'): void {
   if (hasTerminalState) {
@@ -109,8 +370,9 @@ function setErrorState(message: string, stage: 'connect' | 'download' | 'pack'):
 
   progress_text.textContent = message
   progress_text.style.color = '#ff4444'
-  progress_result.style.opacity = '0'
+  setDownloadLinkEnabled(false)
   hasTerminalState = true
+  completedText = ''
 }
 
 async function toBuffer(data: Blob | ArrayBuffer | string): Promise<Uint8Array | null> {
@@ -140,9 +402,27 @@ socket.addEventListener('open', () => {
   progress_text.textContent = '10%'
   progress_text.style.color = 'var(--text_color)'
   progress_bar.style.width = '10%'
+
+  sendSocketCommand({ type: 'start' })
 })
 
 socket.addEventListener('message', async (event) => {
+  if (typeof event.data === 'string') {
+    try {
+      const message = JSON.parse(event.data) as { type?: string; format?: string; status?: string; error?: string }
+      if (message.type === 'prepare') {
+        handlePrepareEvent(message)
+      }
+    } catch {
+      if (!hasTerminalState) {
+        const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
+        setErrorState('Failed to parse server response', stage)
+        socket.close()
+      }
+    }
+    return
+  }
+
   if (hasTerminalState) {
     return
   }
@@ -242,21 +522,26 @@ socket.addEventListener('message', async (event) => {
       }
 
       const elapsedText = formatElapsedTime(startTime)
-      progress_text.textContent = `100% (${elapsedText})`
-      progress_result.href = url
-      progress_result.style.opacity = '1'
+      completedText = `100% (${elapsedText})`
+      syncPackTextToSelection()
+      step_finish_text.textContent = defaultFinishText
+      progress_text.textContent = completedText
+      downloadBaseUrl = url
+      updateDownloadHref()
+      setDownloadLinkEnabled(true)
       progress_bar.style.width = '100%'
       hasTerminalState = true
-
-      const a = document.createElement('a')
-      a.href = url
-      a.click()
+      queueArchiveWorkflow(true)
     } else {
       const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
       setErrorState('Unexpected response from server', stage)
       socket.close()
     }
   } catch {
+    if (pendingPrepare) {
+      pendingPrepare.reject(new Error('Connection closed before prepare completed'))
+      pendingPrepare = null
+    }
     const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
     setErrorState('Failed to parse server response', stage)
     socket.close()
@@ -264,6 +549,11 @@ socket.addEventListener('message', async (event) => {
 })
 
 socket.addEventListener('error', () => {
+  if (pendingPrepare) {
+    pendingPrepare.reject(new Error('Connection failed during archive preparation'))
+    pendingPrepare = null
+  }
+
   if (hasTerminalState) {
     return
   }
@@ -276,6 +566,11 @@ socket.addEventListener('error', () => {
 })
 
 socket.addEventListener('close', () => {
+  if (pendingPrepare) {
+    pendingPrepare.reject(new Error('Connection closed during archive preparation'))
+    pendingPrepare = null
+  }
+
   if (hasTerminalState) {
     return
   }
