@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/draw"
 	"io"
 	"os"
 	"path/filepath"
@@ -56,8 +57,7 @@ func packArchives(ctx context.Context, cfg DownloadConfig) (err error) {
 	}
 
 	zipPath := filepath.Join(cfg.DownloadDir, cfg.Filename)
-	cbzPath := archivePathWithExt(zipPath, ".cbz")
-	artifacts := []string{zipPath, cbzPath}
+	artifacts := []string{zipPath}
 
 	defer func() {
 		if err != nil {
@@ -80,12 +80,6 @@ func packArchives(ctx context.Context, cfg DownloadConfig) (err error) {
 			name: "zip",
 			run: func() error {
 				return packZipLike(ctx, filePaths, zipPath, nil)
-			},
-		},
-		{
-			name: "cbz",
-			run: func() error {
-				return packZipLike(ctx, filePaths, cbzPath, cbzEntryNamer(filePaths))
 			},
 		},
 	}
@@ -117,11 +111,7 @@ func packArchives(ctx context.Context, cfg DownloadConfig) (err error) {
 		}
 	}
 
-	logInfo(
-		"Pack archives: created %s and %s",
-		filepath.Base(zipPath),
-		filepath.Base(cbzPath),
-	)
+	logInfo("Pack archives: created %s", filepath.Base(zipPath))
 	return nil
 }
 
@@ -455,7 +445,7 @@ func packEPUB(ctx context.Context, filePaths []string, outputPath, title, identi
 }
 
 func normalizePDFImageData(data []byte, format string) ([]byte, string, error) {
-	if imageType, ok := pdfImageTypes[strings.ToLower(format)]; ok {
+	if imageType, ok := pdfImageTypes[strings.ToLower(format)]; ok && imageType != "PNG" {
 		return data, imageType, nil
 	}
 
@@ -464,8 +454,14 @@ func normalizePDFImageData(data []byte, format string) ([]byte, string, error) {
 		return nil, "", err
 	}
 
+	// gofpdf rejects 16-bit PNG payloads, so normalize every non-JPEG/GIF
+	// image to an 8-bit RGBA PNG before embedding it into the PDF.
+	bounds := img.Bounds()
+	normalized := image.NewNRGBA(bounds)
+	draw.Draw(normalized, bounds, img, bounds.Min, draw.Src)
+
 	var converted bytes.Buffer
-	if err := png.Encode(&converted, img); err != nil {
+	if err := png.Encode(&converted, normalized); err != nil {
 		return nil, "", fmt.Errorf("encode png: %w", err)
 	}
 

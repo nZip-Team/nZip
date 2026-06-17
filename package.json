@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "type": "module",
   "scripts": {
     "start": "bun Main.ts",
@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "bun": "^1.3.14",
-    "hono": "^4.12.21"
+    "hono": "^4.12.25"
   },
   "devDependencies": {
     "bun-types": "^1.3.14",
-    "prettier": "^3.8.3"
+    "prettier": "^3.8.4"
   }
 }

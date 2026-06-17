@@ -481,9 +481,9 @@ export default class WebSocketHandler {
         this.sendPrepareStatus(ws, format, 'started')
         pending = this.downloadManager.packFormat(path.join(this.downloadDir, session.hash), session.filename, session.hash, format, [])
         this.archiveGeneration.set(generationKey, pending)
-        pending.finally(() => {
+        void pending.finally(() => {
           this.archiveGeneration.delete(generationKey)
-        })
+        }).catch(() => {})
       } else {
         this.sendPrepareStatus(ws, format, 'started')
       }

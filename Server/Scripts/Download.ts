@@ -96,7 +96,7 @@ let archiveWorkflowRunning = false
 let archiveWorkflowQueued = false
 let autoDownloadRequested = false
 const validFormats = ['zip', 'cbz', 'pdf', 'epub'] as const
-const onDemandFormats = ['pdf', 'epub'] as const
+const onDemandFormats = ['cbz', 'pdf', 'epub'] as const
 let pendingPrepare:
   | { format: string; resolve: () => void; reject: (error: Error) => void; onStarted: () => void }
   | null = null
