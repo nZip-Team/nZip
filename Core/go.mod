@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/phpdave11/gofpdf v1.4.3
-	golang.org/x/image v0.33.0
+	golang.org/x/image v0.38.0
 	modernc.org/sqlite v1.46.1
 )
 
