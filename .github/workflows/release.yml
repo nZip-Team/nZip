@@ -8,6 +8,12 @@ on:
 permissions:
   contents: write
 
+# One at a time: if the same release commit is dispatched twice, the second
+# run finds the tag already there and stops, instead of racing the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -23,11 +29,17 @@ jobs:
       - name: Parse release commit message
         id: parse_release
         shell: bash
+        # Passed through the environment, never pasted into the script: the
+        # message is free text, and a quote in it would otherwise end the
+        # string and run the rest as shell.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PAYLOAD_MESSAGE: ${{ github.event.client_payload.message }}
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            COMMIT_MESSAGE="${{ github.event.client_payload.message }}"
+          if [[ "$EVENT_NAME" == "repository_dispatch" ]]; then
+            COMMIT_MESSAGE="$PAYLOAD_MESSAGE"
           else
             COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
           fi
@@ -91,10 +103,11 @@ jobs:
         id: tag_check
         if: steps.parse_release.outputs.matched == 'true'
         shell: bash
+        env:
+          TAG: ${{ steps.parse_release.outputs.tag }}
         run: |
           set -euo pipefail
 
-          TAG="${{ steps.parse_release.outputs.tag }}"
           if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Tag $TAG already exists. Skipping release creation."
@@ -115,6 +128,10 @@ jobs:
       - name: Trigger Docker workflow
         if: steps.create_release.outcome == 'success'
         uses: actions/github-script@v9
+        # Same as above: dispatch payload values reach the script as data.
+        env:
+          RELEASE_SHA: ${{ steps.commit_bump.outputs.sha || github.event.client_payload.sha || github.sha }}
+          RELEASE_TAG: ${{ steps.parse_release.outputs.tag }}
         with:
           script: |
             await github.rest.repos.createDispatchEvent({
@@ -122,7 +139,7 @@ jobs:
               repo: context.repo.repo,
               event_type: 'run-docker',
               client_payload: {
-                sha: '${{ steps.commit_bump.outputs.sha || github.event.client_payload.sha || github.sha }}',
-                tag: '${{ steps.parse_release.outputs.tag }}'
+                sha: process.env.RELEASE_SHA,
+                tag: process.env.RELEASE_TAG
               }
             })
