@@ -486,7 +486,7 @@ func buildArchiveFile(ctx context.Context, outputPath string, build func(tmpPath
 		return nil
 	}
 
-	tmpFile, err := os.CreateTemp(filepath.Dir(outputPath), filepath.Base(outputPath)+".*.tmp")
+	tmpFile, err := os.CreateTemp(filepath.Dir(outputPath), archiveSiblingName(outputPath)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
@@ -520,8 +520,18 @@ func archiveExists(outputPath string) bool {
 	return err == nil && st.Size() > 0
 }
 
+// archiveSiblingName names the lock and temp files kept next to an archive
+// after its format (".zip", ".epub", ...) instead of after the archive. The
+// archive's name carries the gallery title and can sit right at the 255-byte
+// filename limit, so anything appended to it fails with "file name too long".
+// Every gallery packs into its own directory, so the format is enough to keep
+// these apart; two builds of one format there only share a lock.
+func archiveSiblingName(outputPath string) string {
+	return "." + strings.TrimPrefix(strings.ToLower(filepath.Ext(outputPath)), ".")
+}
+
 func acquireArchiveBuildLock(ctx context.Context, outputPath string) (func(), error) {
-	lockPath := outputPath + ".lock"
+	lockPath := filepath.Join(filepath.Dir(outputPath), archiveSiblingName(outputPath)+".lock")
 
 	for {
 		lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
