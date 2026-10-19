@@ -506,6 +506,11 @@ export default class WebSocketHandler {
       return
     }
 
+    // Big galleries can take longer to pack than the session expiry, which would let cleanup delete the files mid-pack.
+    const keepAlive = setInterval(() => {
+      void this.sessionStore.touch(session.hash).catch(() => {})
+    }, 30000)
+
     try {
       await pending
       this.sendPrepareStatus(ws, format, 'ready')
@@ -513,6 +518,8 @@ export default class WebSocketHandler {
       const message = error instanceof Error ? error.message : String(error)
       Log.warn(`WS Prepare Failed: ${session.id} - ${format} - ${message}`)
       this.sendPrepareStatus(ws, format, 'error', message)
+    } finally {
+      clearInterval(keepAlive)
     }
   }
 
@@ -764,6 +771,13 @@ export default class WebSocketHandler {
     })
   }
 
+  private isPacking(hash: string): boolean {
+    for (const key of this.archiveGeneration.keys()) {
+      if (key.startsWith(`${hash}:`)) return true
+    }
+    return false
+  }
+
   /**
    * Clean up orphaned download directories that no longer have active sessions
    */
@@ -781,7 +795,7 @@ export default class WebSocketHandler {
         .map(dirent => dirent.name)
 
       for (const hash of directories) {
-        if (activeHashes.has(hash)) {
+        if (activeHashes.has(hash) || this.isPacking(hash)) {
           continue
         }
 
