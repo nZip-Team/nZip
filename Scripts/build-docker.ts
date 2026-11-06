@@ -45,7 +45,9 @@ async function buildDockerImage(version: string): Promise<void> {
 
   Log.info('Building and pushing multi-arch Docker images (linux/amd64, linux/arm64)...')
   const tagArgs = allTags.flatMap((tag) => ['-t', tag])
-  await $`docker buildx build --platform linux/amd64,linux/arm64 ${tagArgs} --build-arg VERSION=${version} --build-arg REVISION=${revision} --build-arg CREATED=${created} --push .`
+  // Layer cache shared between CI runs; unchanged Go modules and installs are reused
+  const cacheRef = 'ghcr.io/nzip-team/nzip:buildcache'
+  await $`docker buildx build --platform linux/amd64,linux/arm64 ${tagArgs} --build-arg VERSION=${version} --build-arg REVISION=${revision} --build-arg CREATED=${created} --cache-from type=registry,ref=${cacheRef} --cache-to type=registry,ref=${cacheRef},mode=max --push .`
 
   Log.success('Docker image build and push complete.')
 }

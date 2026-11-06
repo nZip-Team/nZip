@@ -15,10 +15,10 @@
     "prettier": "prettier --write ."
   },
   "dependencies": {
-    "bun": "^1.3.14",
     "hono": "^4.12.25"
   },
   "devDependencies": {
+    "bun": "^1.3.14",
     "bun-types": "^1.3.14",
     "prettier": "^3.8.4"
   }
