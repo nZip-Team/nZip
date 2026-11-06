@@ -1,6 +1,7 @@
 # Load balancer for compose.ha.yml
 {
-	admin off
+	# Only reachable inside the container: `docker exec nzip-lb caddy reload --config /etc/caddy/Caddyfile`
+	admin localhost:2019
 	auto_https off
 	servers {
 		# Keep the X-Forwarded-For from cloudflared
@@ -8,19 +9,34 @@
 	}
 }
 
+(upstreams) {
+	lb_try_duration 30s
+	lb_try_interval 250ms
+
+	# 503 while draining
+	health_uri /healthz
+	health_interval 2s
+	health_timeout 2s
+	health_status 200
+	fail_duration 10s
+
+	flush_interval -1
+}
+
 :80 {
-	reverse_proxy nzip-a:3000 nzip-b:3000 {
-		lb_policy uri_hash
-		lb_try_duration 30s
-		lb_try_interval 250ms
+	# One client's searches always reach the same instance, so its search limits are not doubled
+	@search path /search
+	handle @search {
+		reverse_proxy nzip-a:3000 nzip-b:3000 {
+			lb_policy header CF-Connecting-IP
+			import upstreams
+		}
+	}
 
-		# 503 while draining
-		health_uri /healthz
-		health_interval 2s
-		health_timeout 2s
-		health_status 200
-		fail_duration 10s
-
-		flush_interval -1
+	handle {
+		reverse_proxy nzip-a:3000 nzip-b:3000 {
+			lb_policy uri_hash
+			import upstreams
+		}
 	}
 }

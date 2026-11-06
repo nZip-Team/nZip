@@ -86,7 +86,9 @@ Every variable lives in `.env`.
 | `API_URL` | — | **Required.** Gallery API, absolute URL |
 | `IMAGE_URL` | — | **Required.** Image host, absolute URL |
 | `CONCURRENT_IMAGE_DOWNLOADS` | `16` | Parallel image fetches per gallery |
-| `RATE_LIMIT` | `10` | WebSocket upgrades per minute per client; searches get 6× this |
+| `RATE_LIMIT` | `10` | WebSocket upgrades per minute per client |
+| `SEARCH_RATE_LIMIT` | `20` | Searches per minute per client, after a burst of 1.5× this; `0` disables |
+| `SEARCH_HOURLY_LIMIT` | `300` | Searches per hour per client; `0` disables |
 | `TRUST_X_FORWARDED_FOR` | `false` | Read the client address from trusted proxies |
 | `TRUSTED_PROXIES` | — | Comma-separated IPs or CIDRs of those proxies |
 | `LOG_CLIENT_IP` | `false` | Log raw client IPs instead of salted hash tags |

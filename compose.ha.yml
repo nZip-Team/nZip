@@ -13,6 +13,8 @@ x-nzip: &nzip
     - IMAGE_URL=${IMAGE_URL}
     - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
     - RATE_LIMIT=${RATE_LIMIT:-10}
+    - SEARCH_RATE_LIMIT=${SEARCH_RATE_LIMIT:-20}
+    - SEARCH_HOURLY_LIMIT=${SEARCH_HOURLY_LIMIT:-300}
     - LOG_CLIENT_IP=${LOG_CLIENT_IP:-false}
     - LOG_CLIENT_SALT=${LOG_CLIENT_SALT}
     - TRUST_X_FORWARDED_FOR=${TRUST_X_FORWARDED_FOR}
@@ -39,6 +41,16 @@ x-nzip: &nzip
   stop_grace_period: 90s
   restart: unless-stopped
 
+# /ready on the metrics port answers 200 once the connector has an edge connection
+x-cloudflared: &cloudflared
+  image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+  command: tunnel --no-autoupdate --metrics 0.0.0.0:2000 run
+  environment:
+    - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+  depends_on:
+    - nzip-lb
+  restart: unless-stopped
+
 services:
   nzip-a:
     <<: *nzip
@@ -59,17 +71,15 @@ services:
       - caddy-data:/data
     restart: unless-stopped
 
-  # Remotely managed tunnel: public hostname -> http://nzip-lb:80, token in TUNNEL_TOKEN
-  cloudflared:
-    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-    depends_on:
-      - nzip-lb
-    deploy:
-      replicas: 2
-    restart: unless-stopped
+  # Two connectors of one remotely managed tunnel (public hostname -> http://nzip-lb:80),
+  # so Scripts/rolling-update.sh can replace them one at a time
+  cloudflared-a:
+    <<: *cloudflared
+    container_name: nzip-cloudflared-a
+
+  cloudflared-b:
+    <<: *cloudflared
+    container_name: nzip-cloudflared-b
 
 volumes:
   nzip-cache:

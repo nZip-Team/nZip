@@ -38,6 +38,8 @@ export default {
 
   concurrentImageDownloads: parseInt(process.env['CONCURRENT_IMAGE_DOWNLOADS'] || '16', 10),
   rateLimit: parseInt(process.env['RATE_LIMIT'] || '10', 10),
+  searchRateLimit: parseInt(process.env['SEARCH_RATE_LIMIT'] || '20', 10),
+  searchHourlyLimit: parseInt(process.env['SEARCH_HOURLY_LIMIT'] || '300', 10),
 
   analytics: process.env['ANALYTICS'] || '',
 

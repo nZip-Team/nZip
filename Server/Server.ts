@@ -96,7 +96,13 @@ export default async (): Promise<() => Promise<void>> => {
   )
 
   const wsRateLimiter = new RateLimiter(Config.rateLimit, 60 * 1000)
-  const searchRateLimiter = new RateLimiter(Config.rateLimit * 6, 60 * 1000)
+  // A person searches in bursts; a scraper pages steadily. Allow a burst of 1.5 minutes' worth, then the
+  // per-minute rate, and cap the hour so a steady crawl stops early.
+  const searchBurst = Math.ceil(Config.searchRateLimit * 1.5)
+  const searchLimiters = [
+    Config.searchRateLimit > 0 && new RateLimiter(searchBurst, (searchBurst / Config.searchRateLimit) * 60 * 1000),
+    Config.searchHourlyLimit > 0 && new RateLimiter(Config.searchHourlyLimit, 60 * 60 * 1000)
+  ].filter((limiter) => limiter !== false)
 
   analytics = Config.analytics || null
 
@@ -164,8 +170,9 @@ export default async (): Promise<() => Promise<void>> => {
     if (direct) return c.redirect(`/g/${direct[1]}`)
 
     const ip = getIP(c)
-    if (!searchRateLimiter.allow(ip)) {
-      c.header('Retry-After', String(searchRateLimiter.getRetryAfterSeconds(ip) || 60))
+    const limited = searchLimiters.find((limiter) => !limiter.allow(ip))
+    if (limited) {
+      c.header('Retry-After', String(limited.getRetryAfterSeconds(ip) || 60))
       c.status(429)
       return Page(c, 'Error', { error: 'Too many searches, please wait a minute.' })
     }
