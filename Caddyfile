@@ -1,4 +1,6 @@
 # Load balancer for compose.ha.yml
+#   :80  cloudflared only (tunnel route http://nzip-lb:80); not published, so CF-Connecting-IP is Cloudflare's
+#   :81  LAN, published as ${NZIP_PORT}; client address headers are dropped, so nobody can claim another address
 {
 	# Only reachable inside the container: `docker exec nzip-lb caddy reload --config /etc/caddy/Caddyfile`
 	admin localhost:2019
@@ -13,7 +15,7 @@
 	lb_try_duration 30s
 	lb_try_interval 250ms
 
-	# 503 while draining
+	# 503 while draining or without a working core
 	health_uri /healthz
 	health_interval 2s
 	health_timeout 2s
@@ -24,11 +26,57 @@
 }
 
 :80 {
+	# Internal endpoints never go through the tunnel
+	@internal path /metrics /metrics/*
+	handle @internal {
+		respond 404
+	}
+
 	# One client's searches always reach the same instance, so its search limits are not doubled
 	@search path /search
 	handle @search {
 		reverse_proxy nzip-a:3000 nzip-b:3000 {
 			lb_policy header CF-Connecting-IP
+			import upstreams
+		}
+	}
+
+	handle {
+		reverse_proxy nzip-a:3000 nzip-b:3000 {
+			lb_policy uri_hash
+			import upstreams
+		}
+	}
+}
+
+:81 {
+	# Another tunnel pointed at this port (Cloudflare adds Cf-Ray) must not reach the metrics either
+	@tunneled_metrics {
+		path /metrics /metrics/*
+		header Cf-Ray *
+	}
+	handle @tunneled_metrics {
+		respond 404
+	}
+
+	request_header -CF-Connecting-IP
+	request_header -X-Forwarded-For
+	request_header -X-Real-IP
+
+	# Prometheus scrapes each instance on its own path
+	handle /metrics/nzip-a {
+		rewrite * /metrics
+		reverse_proxy nzip-a:3000
+	}
+	handle /metrics/nzip-b {
+		rewrite * /metrics
+		reverse_proxy nzip-b:3000
+	}
+
+	@search path /search
+	handle @search {
+		reverse_proxy nzip-a:3000 nzip-b:3000 {
+			lb_policy ip_hash
 			import upstreams
 		}
 	}

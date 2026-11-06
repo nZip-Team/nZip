@@ -185,7 +185,9 @@ function attach(input: HTMLInputElement, index: number): void {
   function choose(item: Item): void {
     if (item.kind === 'search') {
       close()
-      window.location.href = `/search?q=${encodeURIComponent(item.query)}`
+      // Through the form, so its sort and the home page's ID/link handling apply
+      if (input.form && typeof input.form.requestSubmit === 'function') input.form.requestSubmit()
+      else window.location.href = `/search?q=${encodeURIComponent(item.query)}`
     } else if (item.kind === 'hint') {
       replaceTerm(item.hint.insert)
     } else {

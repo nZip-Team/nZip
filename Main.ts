@@ -1,20 +1,33 @@
 import Server from './Server/Server'
 import Scripts from './Server/Modules/Scripts'
+import Log from './Server/Tools/Log'
 
 const development = process.env['NODE_ENV'] === 'development'
 
 let serverCleanup: (() => Promise<void>) | null = null
 let isShuttingDown = false
 
+// One failed promise must not take down every download of this instance
+process.on('unhandledRejection', (reason) => {
+  Log.error('Unhandled rejection:', reason instanceof Error ? (reason.stack ?? reason.message) : reason)
+})
+process.on('uncaughtException', (error) => {
+  Log.error('Uncaught exception:', error.stack ?? error.message)
+})
+
 async function shutdown(): Promise<void> {
   if (isShuttingDown) return
   isShuttingDown = true
   console.log()
-  
-  if (serverCleanup) {
-    await serverCleanup()
+
+  try {
+    if (serverCleanup) {
+      await serverCleanup()
+    }
+  } catch (error) {
+    Log.error(`Shutdown failed: ${error}`)
   }
-  
+
   process.exit(0)
 }
 
@@ -34,4 +47,7 @@ async function start(): Promise<void> {
   }
 }
 
-start() // Where All Miracles Begin
+start().catch((error) => {
+  Log.error('Failed to start:', error instanceof Error ? (error.stack ?? error.message) : error)
+  process.exit(1)
+}) // Where All Miracles Begin

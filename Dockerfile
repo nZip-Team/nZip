@@ -43,8 +43,9 @@ LABEL org.opencontainers.image.created="${CREATED}"
 
 WORKDIR /workspace
 
-# Mount a volume here to keep sessions, the archive index and running downloads
-RUN mkdir -p /workspace/Cache
+# Mount a volume here to keep sessions, the archive index and running downloads.
+# A new volume takes this owner; start.sh fixes older root-owned ones, then runs as bun.
+RUN mkdir -p /workspace/Cache && chown bun:bun /workspace/Cache
 
 COPY --from=nzip-builder /workspace/dist /workspace
 COPY --from=core-builder /workspace/Core/nzip-core /workspace/nzip-core

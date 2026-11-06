@@ -66,3 +66,23 @@ export function parseRangeHeader(rangeHeader: string | undefined, fileSize: numb
     return fullRange
   }
 }
+
+/**
+ * Whether a Range may be honoured under If-Range (RFC 9110 13.1.5)
+ * @param ifRange The If-Range header value
+ * @param etag Strong ETag of the current representation
+ * @param lastModified Last modification time of the current representation
+ * @returns true without If-Range, or when it names the current representation
+ */
+export function ifRangeMatches(ifRange: string | undefined, etag: string, lastModified: Date): boolean {
+  if (!ifRange) return true
+  const value = ifRange.trim()
+
+  // A weak tag never matches
+  if (value.startsWith('W/')) return false
+  if (value.startsWith('"')) return value === etag
+
+  const date = Date.parse(value)
+  if (Number.isNaN(date)) return false
+  return Math.floor(date / 1000) === Math.floor(lastModified.getTime() / 1000)
+}

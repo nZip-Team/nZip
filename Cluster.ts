@@ -55,7 +55,7 @@ async function shutdown(signal: string) {
         Log.warn(`Force killing worker ${i}...`)
         bun.kill('SIGKILL')
         resolve()
-      }, Config.drainTimeoutMs + 15000)
+      }, Config.shutdownBudgetMs + 3000)
 
       bun.once('exit', () => {
         clearTimeout(timeout)

@@ -9,7 +9,9 @@
     "Terms": "利用規約",
     "and": "と",
     "Privacy": "プライバシーポリシー",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Recent downloads": "最近のダウンロード",
+    "Clear": "消去"
   },
   "Download": {
     "Connecting to the server...": "サーバーに接続しています...",
@@ -35,7 +37,12 @@
     "Unexpected empty response from server": "サーバーから空の応答が返されました",
     "Unexpected response from server": "サーバーから予期しない応答が返されました",
     "Malformed download progress message": "ダウンロード進捗メッセージの形式が正しくありません",
-    "Missing download link from server": "サーバーからダウンロードリンクが提供されませんでした"
+    "Missing download link from server": "サーバーからダウンロードリンクが提供されませんでした",
+    "Show cover": "表紙を表示",
+    "Copy link": "リンクをコピー",
+    "Link copied": "リンクをコピーしました",
+    "Format": "形式",
+    "Ready to download": "ダウンロードの準備ができました"
   },
   "Error": {
     "Error": "エラー",
@@ -46,7 +53,8 @@
     "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.": "予期しないエラーが発生しました。<a href=\"/\">ホーム</a>に戻ってください。",
     "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.": "ID {id} の同人誌はダウンロードできません。<a href=\"/g/{id}\">このページ</a>で新しいリンクを取得できます。",
     "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.": "そのファイルは存在しません。<a href=\"/\">ホーム</a>に戻って新しいリンクを取得してください。",
-    "Too many searches, please wait a minute.": "検索回数が多すぎます。1 分ほどお待ちください。"
+    "Too many searches, please wait a minute.": "検索回数が多すぎます。1 分ほどお待ちください。",
+    "Something went wrong.": "問題が発生しました。"
   },
   "Terms": {
     "Terms of Service": "利用規約",
@@ -60,7 +68,8 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "本規約に関するご質問やご懸念がある場合は、contact [at] nhentai [dot] zip までご連絡ください。",
     "Back": "戻る",
     "Privacy Policy": "プライバシーポリシー",
-    "DMCA Policy": "DMCA ポリシー"
+    "DMCA Policy": "DMCA ポリシー",
+    "Terms of Service of nZip": "nZip の利用規約"
   },
   "Privacy": {
     "Privacy Policy": "プライバシーポリシー",
@@ -75,7 +84,8 @@
     "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "nZip を使用することにより、利用者は利用規約および本プライバシーポリシーを読み、理解したものとみなされます。これらの条件に同意しない場合は、本サービスの使用をお控えください。",
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "本規約に関するご質問やご懸念がある場合は、contact [at] nhentai [dot] zip までご連絡ください。",
     "Back": "戻る",
-    "Terms of Service": "利用規約"
+    "Terms of Service": "利用規約",
+    "Privacy Policy of nZip": "nZip のプライバシーポリシー"
   },
   "DMCA": {
     "DMCA Policy": "DMCA ポリシー",
@@ -84,7 +94,8 @@
     "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.": "削除通知を提出する際は、連絡先情報、著作物の特定、侵害が疑われる資料の特定、誠実な信念に基づく声明、および記載内容が正確であることを偽証罪の制裁の下で宣誓する声明を含めてください。",
     "Send Notices": "通知の送付",
     "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "DMCA 通知は contact [at] nhentai [dot] zip 宛てに送付してください。有効な通知を審査し、適切な措置を講じます。",
-    "Back": "戻る"
+    "Back": "戻る",
+    "DMCA policy for nZip": "nZip の DMCA ポリシー"
   },
   "Search": {
     "Search": "検索",
@@ -102,7 +113,19 @@
     "Search failed, please try again later.": "検索に失敗しました。しばらくしてからもう一度お試しください。",
     "Packing…": "パッキング中…",
     "Download failed, click to try again": "ダウンロードに失敗しました。クリックして再試行",
-    "Download": "ダウンロード"
+    "Download": "ダウンロード",
+    "Too many searches. Please wait {seconds} seconds and try again.": "検索回数が多すぎます。{seconds} 秒待ってからもう一度お試しください。",
+    "Queued": "待機中",
+    "Too many downloads at once. Waiting a minute before continuing…": "同時ダウンロードが多すぎます。1 分待ってから続行します…",
+    "Server busy or rate limited. Try again later.": "サーバーが混み合っているか、レート制限されています。後でもう一度お試しください。",
+    "{count} pages missing": "{count} ページ欠落",
+    "Download all on this page": "このページをすべてダウンロード",
+    "Downloading this page…": "このページをダウンロード中…",
+    "Sort": "並べ替え",
+    "Pages": "ページ",
+    "Page number": "ページ番号",
+    "First": "最初",
+    "Last": "最後"
   },
   "Preferences": {
     "Preferences": "設定",
@@ -110,7 +133,13 @@
     "Blur covers until clicked or hovered": "クリックまたはホバーするまで表紙をぼかす",
     "Language": "言語",
     "Open Pull Requests on GitHub to add your own language!": "GitHub でプルリクエストを送って、あなたの言語を追加しよう！",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Theme": "テーマ",
+    "System": "システム設定",
+    "Dark": "ダーク",
+    "Light": "ライト",
+    "Notifications": "通知",
+    "Notify me when a download is ready": "ダウンロードの準備ができたら通知する"
   },
   "Suggest": {
     "Search suggestions": "検索候補",

@@ -3,6 +3,7 @@
 # never by recreating both instances at once.
 # Set TRUST_X_FORWARDED_FOR=true, TRUSTED_PROXIES to private ranges, and LOG_CLIENT_SALT so
 # both instances log the same tag for a client.
+# Variables are listed one by one rather than with env_file, so TUNNEL_TOKEN stays out of nZip.
 
 x-nzip: &nzip
   image: ${NZIP_IMAGE:-ghcr.io/nzip-team/nzip:latest}
@@ -20,6 +21,8 @@ x-nzip: &nzip
     - TRUST_X_FORWARDED_FOR=${TRUST_X_FORWARDED_FOR}
     - TRUSTED_PROXIES=${TRUSTED_PROXIES}
     - ANALYTICS=${ANALYTICS}
+    - CONTENT_SECURITY_POLICY=${CONTENT_SECURITY_POLICY:-}
+    - LOG_FORMAT=${LOG_FORMAT:-text}
     - NODE_ENV=${NODE_ENV}
     - S3_ENDPOINT=${S3_ENDPOINT}
     - S3_BUCKET=${S3_BUCKET}
@@ -27,9 +30,11 @@ x-nzip: &nzip
     - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
     - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
     - S3_PREFIX=${S3_PREFIX}
+    - S3_VIRTUAL_HOSTED_STYLE=${S3_VIRTUAL_HOSTED_STYLE:-false}
     - ARCHIVE_RETENTION_DAYS=${ARCHIVE_RETENTION_DAYS}
     - ARCHIVE_MAX_GB=${ARCHIVE_MAX_GB}
-    - DRAIN_TIMEOUT_SECONDS=${DRAIN_TIMEOUT_SECONDS}
+    - DRAIN_TIMEOUT_SECONDS=${DRAIN_TIMEOUT_SECONDS:-60}
+    - NZIP_RUN_AS_ROOT=${NZIP_RUN_AS_ROOT:-false}
   volumes:
     - nzip-cache:/workspace/Cache
   healthcheck:
@@ -38,6 +43,7 @@ x-nzip: &nzip
     timeout: 3s
     start_period: 60s
     retries: 3
+  # Longer than the shutdown: DRAIN_TIMEOUT_SECONDS + 25 s
   stop_grace_period: 90s
   restart: unless-stopped
 
@@ -63,9 +69,10 @@ services:
   nzip-lb:
     image: caddy:2-alpine
     container_name: nzip-lb
-    # LAN access without the tunnel
+    # LAN access without the tunnel, on the listener that drops client address headers.
+    # :80 is for cloudflared only and stays unpublished.
     ports:
-      - '${NZIP_PORT:-3000}:80'
+      - '${NZIP_PORT:-3000}:81'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

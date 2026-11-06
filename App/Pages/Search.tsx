@@ -25,11 +25,15 @@ export default (args: {
   results: { id: number; title: string; thumbnail: string; width: number; height: number; pages: number }[]
   error?: string
   api: string
+  language?: string
+  languages?: { code: string; name: string; symbol: string; tag: string }[]
+  locale?: string
   t: (key: string) => string
   tr: (section: string, key: string) => string
   script: (name: string) => string
 }) => {
   const t = args.t
+  const number = new Intl.NumberFormat(args.locale || 'en-US')
 
   const sorts = [
     ['date', t('Recent')],
@@ -46,41 +50,65 @@ export default (args: {
     return `/search?${params}`
   }
 
-  const fieldStyle = { outline: 'none', backgroundColor: 'var(--background_color)', color: 'var(--text_color)', border: '0.1rem solid var(--text_color)', borderRadius: '0.25rem', fontSize: '1.1rem', padding: '0.4rem 0.5rem' }
+  const fieldStyle = { backgroundColor: 'var(--background_color)', color: 'var(--text_color)', border: '0.1rem solid var(--text_color)', borderRadius: '0.25rem', fontSize: '1.1rem', padding: '0.4rem 0.5rem' }
+
+  const pageNav = (page: number, label: string, rel?: string) =>
+    page >= 1 && page <= args.numPages && page !== args.page
+      ? <a className="text" href={pageLink(page)} rel={rel}>{label}</a>
+      : <span className="text pagination-disabled">{label}</span>
+
+  // Strings for the card download queue in Server/Scripts/Search.ts
+  const cardStrings = JSON.stringify({
+    packing: t('Packing…'),
+    failed: t('Download failed, click to try again'),
+    queued: t('Queued'),
+    rateLimited: t('Too many downloads at once. Waiting a minute before continuing…'),
+    busy: t('Server busy or rate limited. Try again later.'),
+    missing: t('{count} pages missing'),
+    all: t('Download all on this page'),
+    allRunning: t('Downloading this page…')
+  })
 
   return {
     title: args.query ? `nZip | ${t('Search')}: ${args.query}` : `nZip | ${t('Search')}`,
     description: t('Search doujinshi and download them as an archive.'),
+    noindex: true,
     content: (
-      <body style={{ backgroundColor: 'var(--background_color)', margin: '0px', minHeight: '100dvh' }}>
-        <Preferences tr={args.tr} />
-        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1rem 4rem 1rem 1rem' }}>
-          <form action="/search" method="get" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+      <>
+        <Preferences tr={args.tr} language={args.language} languages={args.languages} />
+        <main style={{ maxWidth: '80rem', margin: '0 auto', padding: '1rem 4rem 1rem 1rem' }}>
+          <h1 className="visually-hidden">{args.query ? `${t('Search')}: ${args.query}` : t('Search')}</h1>
+          <form action="/search" method="get" role="search" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
             <a href="/" className="text" style={{ fontSize: '2rem', fontWeight: 'bold', textDecoration: 'none', textWrap: 'nowrap' }}>
               <span style={{ color: '#d83e57ff' }}>n</span>Zip
             </a>
             <div style={{ flex: '1', minWidth: '12rem' }}>
-              <input name="q" type="search" value={args.query} placeholder={t('Search')} autocomplete="off" autocapitalize="off" spellcheck={false} data-api={args.api} data-suggest={suggestStrings(args.tr)} style={{ ...fieldStyle, width: '100%', boxSizing: 'border-box' }} />
+              <input name="q" type="search" value={args.query} placeholder={t('Search')} aria-label={t('Search')} autocomplete="off" autocapitalize="off" spellcheck={false} data-api={args.api} data-suggest={suggestStrings(args.tr)} style={{ ...fieldStyle, width: '100%', boxSizing: 'border-box' }} />
             </div>
-            <select name="sort" style={fieldStyle}>
+            <select name="sort" aria-label={t('Sort')} style={fieldStyle}>
               {sorts.map(([value, label]) => <option value={value} selected={value === args.sort}>{label}</option>)}
             </select>
             <button type="submit" className="text" style={{ ...fieldStyle, cursor: 'pointer' }}>{t('Search')}</button>
           </form>
 
-          {args.error && <h1 className="text" style={{ fontSize: '1.25rem', fontWeight: 'normal', color: '#ff4444' }}>{args.error}</h1>}
+          {args.error && <p className="text" role="alert" style={{ fontSize: '1.25rem', color: 'var(--error_color)', marginBottom: '1rem' }}>{args.error}</p>}
 
           {!args.error && args.query && (
-            <h1 className="text" style={{ fontSize: '1rem', fontWeight: 'normal', opacity: '0.6', marginBottom: '1rem' }}>
-              {args.total.toLocaleString('en-US')} {t('results')}
-            </h1>
+            <div className="search-toolbar">
+              <p className="text" style={{ fontSize: '1rem', opacity: '0.6' }}>
+                {number.format(args.total)} {t('results')}
+              </p>
+              {args.results.length > 0 && <button id="search-batch" type="button" className="text search-batch" hidden>{t('Download all on this page')}</button>}
+            </div>
           )}
 
           {!args.error && args.query && args.results.length === 0 && (
-            <h1 className="text" style={{ fontSize: '1.25rem', fontWeight: 'normal' }}>{t('No results.')}</h1>
+            <p className="text" style={{ fontSize: '1.25rem' }}>{t('No results.')}</p>
           )}
 
-          <div className="search-grid" data-packing={t('Packing…')} data-failed={t('Download failed, click to try again')}>
+          <p id="search-status" className="text search-status" role="status" aria-live="polite"></p>
+
+          <div className="search-grid" data-strings={cardStrings}>
             {args.results.map((gallery) => (
               <div className="search-card text">
                 <a href={`/g/${gallery.id}`} className="search-card-link" title={gallery.title}>
@@ -89,24 +117,32 @@ export default (args: {
                 </a>
                 <div className="search-card-meta">
                   <span>{gallery.id} · {gallery.pages} {t('pages')}</span>
-                  <button type="button" className="search-card-download text" data-id={String(gallery.id)} aria-label={`${t('Download')} ${gallery.id}`}>ZIP</button>
+                  <button type="button" className="search-card-download text" data-id={String(gallery.id)} data-title={gallery.title} aria-label={`${t('Download')} ${gallery.id}`}>ZIP</button>
                 </div>
+                <span className="search-card-message" role="status"></span>
               </div>
             ))}
           </div>
 
           {args.numPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem', margin: '1.5rem 0', fontSize: '1.1rem' }}>
-              {args.page > 1 ? <a className="text" href={pageLink(args.page - 1)}>{t('Previous')}</a> : <span className="text" style={{ opacity: '0.3' }}>{t('Previous')}</span>}
-              <span className="text">{args.page} / {args.numPages}</span>
-              {args.page < args.numPages ? <a className="text" href={pageLink(args.page + 1)}>{t('Next')}</a> : <span className="text" style={{ opacity: '0.3' }}>{t('Next')}</span>}
-            </div>
+            <nav className="pagination" aria-label={t('Pages')}>
+              {pageNav(1, t('First'))}
+              {pageNav(args.page - 1, t('Previous'), 'prev')}
+              <form action="/search" method="get" className="page-jump">
+                <input type="hidden" name="q" value={args.query} />
+                {args.sort !== 'date' && <input type="hidden" name="sort" value={args.sort} />}
+                <input type="number" name="page" min={1} max={args.numPages} value={String(args.page)} inputmode="numeric" aria-label={t('Page number')} />
+                <span className="text">/ {number.format(args.numPages)}</span>
+              </form>
+              {pageNav(args.page + 1, t('Next'), 'next')}
+              {pageNav(args.numPages, t('Last'))}
+            </nav>
           )}
-        </div>
+        </main>
         <script type="module" src={args.script('Preferences')}></script>
         <script type="module" src={args.script('Suggest')}></script>
         <script type="module" src={args.script('Search')}></script>
-      </body>
+      </>
     )
   }
 }

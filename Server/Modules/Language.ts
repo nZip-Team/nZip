@@ -189,6 +189,16 @@ class Languages {
   }
 
   /**
+   * Available languages in menu order: English first, then by name.
+   * @returns An array of language objects with code, name, symbol and BCP 47 tag.
+   */
+  public getLanguageMenu(): Array<{ code: string; name: string; symbol: string; tag: string }> {
+    return this.getAvailableLanguages()
+      .sort((a, b) => (a.code === 'en_us' ? -1 : b.code === 'en_us' ? 1 : a.name.localeCompare(b.name)))
+      .map((lang) => ({ ...lang, tag: toLocaleTag(lang.code) }))
+  }
+
+  /**
    * Reloads all language files, useful for development to apply changes without restarting the server.
    */
   public reloadLanguages(): void {
@@ -224,6 +234,16 @@ class Languages {
       Log.debug(...message)
     }
   }
+}
+
+/**
+ * Turn a language file code into a BCP 47 tag ("zh_cn" → "zh-CN", "en_us" → "en-US")
+ * @param code Language file code
+ * @returns The tag for lang attributes and Intl
+ */
+export function toLocaleTag(code: string): string {
+  const [language, region] = code.split('_')
+  return region ? `${language.toLowerCase()}-${region.toUpperCase()}` : language.toLowerCase()
 }
 
 export default new Languages()

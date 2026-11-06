@@ -10,7 +10,7 @@ services:
       - .env
     volumes:
       - nzip-cache:/workspace/Cache
-    # Longer than DRAIN_TIMEOUT_SECONDS
+    # Longer than the shutdown: DRAIN_TIMEOUT_SECONDS + 25 s
     stop_grace_period: 90s
     restart: unless-stopped
 

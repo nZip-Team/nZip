@@ -85,6 +85,15 @@ export function isLoopbackAddress(value: string | ParsedIPAddress | undefined | 
   return address.normalized === '::1'
 }
 
+const PRIVATE_RANGES = loadTrustedProxies(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10'])
+
+/** Loopback, RFC 1918, link-local and IPv6 unique-local addresses */
+export function isPrivateAddress(value: string | ParsedIPAddress | undefined | null): boolean {
+  const address = typeof value === 'string' ? parseIPAddress(value) : value
+  if (!address) return false
+  return isTrustedProxy(address, PRIVATE_RANGES)
+}
+
 export function parseIPAddress(value: string | undefined | null): ParsedIPAddress | null {
   if (!value) {
     return null

@@ -9,7 +9,9 @@
     "Terms": "服務條款",
     "and": "與",
     "Privacy": "隱私政策",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Recent downloads": "最近下載",
+    "Clear": "清除"
   },
   "Download": {
     "Connecting to the server...": "正在連接伺服器...",
@@ -35,7 +37,12 @@
     "Unexpected empty response from server": "伺服器回傳了空白回應",
     "Unexpected response from server": "伺服器回傳了非預期的回應",
     "Malformed download progress message": "下載進度訊息格式錯誤",
-    "Missing download link from server": "伺服器未提供下載連結"
+    "Missing download link from server": "伺服器未提供下載連結",
+    "Show cover": "顯示封面",
+    "Copy link": "複製連結",
+    "Link copied": "已複製連結",
+    "Format": "格式",
+    "Ready to download": "已可下載"
   },
   "Error": {
     "Error": "錯誤",
@@ -46,7 +53,8 @@
     "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.": "發生未預期的錯誤，請回到<a href=\"/\">首頁</a>。",
     "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.": "ID 為 {id} 的同人誌目前無法下載。你可以前往<a href=\"/g/{id}\">此頁面</a>取得新的連結。",
     "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.": "該檔案不存在。你可以回到<a href=\"/\">首頁</a>取得新的連結。",
-    "Too many searches, please wait a minute.": "搜尋次數過多，請等一分鐘後再試。"
+    "Too many searches, please wait a minute.": "搜尋次數過多，請等一分鐘後再試。",
+    "Something went wrong.": "發生了一些問題。"
   },
   "Terms": {
     "Terms of Service": "服務條款",
@@ -60,7 +68,8 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "如果您對這些條款有任何疑問或疑慮，請透過 contact [at] nhentai [dot] zip 與我們聯繫。",
     "Back": "返回",
     "Privacy Policy": "隱私政策",
-    "DMCA Policy": "DMCA 政策"
+    "DMCA Policy": "DMCA 政策",
+    "Terms of Service of nZip": "nZip 服務條款"
   },
   "Privacy": {
     "Privacy Policy": "隱私政策",
@@ -75,7 +84,8 @@
     "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "使用 nZip 即表示您已閱讀並理解服務條款和本隱私政策文件。如果您不同意這些條款，請勿使用本服務。",
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "如果您對這些條款有任何疑問或疑慮，請透過 contact [at] nhentai [dot] zip 與我們聯繫。",
     "Back": "返回",
-    "Terms of Service": "服務條款"
+    "Terms of Service": "服務條款",
+    "Privacy Policy of nZip": "nZip 隱私政策"
   },
   "DMCA": {
     "DMCA Policy": "DMCA 政策",
@@ -84,7 +94,8 @@
     "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.": "提交下架通知時，請包含您的聯絡資訊、被主張侵權的作品識別、涉嫌侵權的材料識別、善意相信之聲明，以及在偽證罪責下聲明資訊屬實的陳述。",
     "Send Notices": "提交通知",
     "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "請將 DMCA 通知寄至 contact [at] nhentai [dot] zip。我們會審核有效通知並採取適當措施。",
-    "Back": "返回"
+    "Back": "返回",
+    "DMCA policy for nZip": "nZip 的 DMCA 政策"
   },
   "Search": {
     "Search": "搜尋",
@@ -102,7 +113,19 @@
     "Search failed, please try again later.": "搜尋失敗，請稍後再試。",
     "Packing…": "打包中…",
     "Download failed, click to try again": "下載失敗，點擊重試",
-    "Download": "下載"
+    "Download": "下載",
+    "Too many searches. Please wait {seconds} seconds and try again.": "搜尋過於頻繁，請等待 {seconds} 秒後再試。",
+    "Queued": "排隊中",
+    "Too many downloads at once. Waiting a minute before continuing…": "同時下載過多，等待一分鐘後繼續…",
+    "Server busy or rate limited. Try again later.": "伺服器忙碌或已被限流，請稍後再試。",
+    "{count} pages missing": "缺少 {count} 頁",
+    "Download all on this page": "下載本頁全部",
+    "Downloading this page…": "正在下載本頁…",
+    "Sort": "排序",
+    "Pages": "分頁",
+    "Page number": "頁碼",
+    "First": "首頁",
+    "Last": "末頁"
   },
   "Preferences": {
     "Preferences": "偏好設定",
@@ -110,7 +133,13 @@
     "Blur covers until clicked or hovered": "模糊封面，點擊或滑過時顯示",
     "Language": "語言",
     "Open Pull Requests on GitHub to add your own language!": "在 GitHub 上提交 Pull Requests 以添加您自己的語言！",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Theme": "主題",
+    "System": "跟隨系統",
+    "Dark": "深色",
+    "Light": "淺色",
+    "Notifications": "通知",
+    "Notify me when a download is ready": "下載就緒時通知我"
   },
   "Suggest": {
     "Search suggestions": "搜尋建議",

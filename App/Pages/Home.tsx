@@ -6,46 +6,57 @@ import suggestStrings from '../Components/SuggestStrings'
  * @param args Arguments
  * @param args.version Version of nZip
  * @param args.t Translation function
- * @returns Object containing the page title, description, keywords and content
+ * @returns Object containing the page title, description and content
  */
 // prettier-ignore
-export default (args: { version: string; api: string; t: (key: string) => string; tr: (section: string, key: string) => string; script: (name: string) => string }) => {
+export default (args: { version: string; api: string; language?: string; languages?: { code: string; name: string; symbol: string; tag: string }[]; t: (key: string) => string; tr: (section: string, key: string) => string; script: (name: string) => string }) => {
   const t = args.t
 
   return {
     title: `nZip | ${t('Home')}`,
     description: t('Easily download the doujinshi you like.'),
-    keywords: 'nhentai downloader, nhentai download, nhentai zip, download nhentai, n hentai downloader, nhentai downloader online, download from nhentai, nhentai.net downloader, nzip nhentai, hentai zip, nhentai manga downloader, doujinshi, manga, batch download, gallery, adult manga, h-manga, doujin, comic, japanese manga',
+    path: '/',
+    bodyClass: 'page-center',
     content: (
-      <body style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--background_color)', margin: '0px', width: '100dvw', height: '100dvh' }}>
-        <Preferences tr={args.tr} />
-        <div style={{ position: 'fixed', display: 'flex', alignItems: 'center', justifyContent: 'center', left: '0px', top: '0px', width: '100dvw', height: '100dvh', zIndex: '-1' }}>
-          <h1 id="text_sauce" className="text" style={{ userSelect: 'none', fontSize: '20rem', opacity: '0.075' }}></h1>
+      <>
+        <Preferences tr={args.tr} language={args.language} languages={args.languages} />
+        <div className="home-backdrop" aria-hidden="true">
+          <div id="text_sauce" className="text home-counter"></div>
         </div>
-        <div style={{ marginLeft: '1rem', marginRight: '1rem' }}>
+        <main style={{ marginLeft: '1rem', marginRight: '1rem', paddingBottom: '2rem' }}>
           <h1 className="text" style={{ fontSize: '2.75rem', textWrap: 'nowrap', margin: '0px' }}>
             <span style={{ color: '#d83e57ff' }}>n</span>Zip
           </h1>
-          <h1 className="text" id="subtitle" style={{ fontSize: '1.25rem', fontWeight: 'normal', margin: '0px', marginBottom: '0.75rem' }}>
+          <p className="text" id="subtitle" style={{ fontSize: '1.25rem', fontWeight: 'normal', margin: '0px', marginBottom: '0.75rem' }}>
             {t('Easily download the doujinshi you like.')}
-          </h1>
-          <input id="input_sauce" type="text" autocomplete="off" autocapitalize="off" spellcheck={false} data-api={args.api} data-suggest={suggestStrings(args.tr)} placeholder={t('The Sauce or a search')} style={{ outline: 'none', backgroundColor: 'var(--background_color)', color: 'var(--text_color)', border: '0.1rem solid var(--text_color)', borderRadius: '0.25rem', fontSize: '1.25rem', fontWeight: 'normal', padding: '0.5rem 0.5rem', width: 'calc(100% - 1.5rem)', minWidth: '20rem' }} />
+          </p>
+          {/* Works without JS: /search redirects IDs and gallery links to /g/:id */}
+          <form id="form_sauce" action="/search" method="get" role="search">
+            <input id="input_sauce" name="q" type="text" className="home-input" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck={false} data-api={args.api} data-suggest={suggestStrings(args.tr)} placeholder={t('The Sauce or a search')} aria-label={t('The Sauce or a search')} />
+          </form>
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', marginTop: '1rem', gap: '0.5rem' }}>
             <a className="text" href="/terms" style={{ fontSize: '1rem' }}>{t('Terms')}</a>
-            <h1 className="text" style={{ fontSize: '1rem', fontWeight: 'normal' }}>{t('and')}</h1>
+            <span className="text" style={{ fontSize: '1rem', fontWeight: 'normal' }}>{t('and')}</span>
             <a className="text" href="/privacy" style={{ fontSize: '1rem' }}>{t('Privacy')}</a>
           </div>
-        </div>
-        <div style={{ position: 'fixed', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '1rem', bottom: '0.6rem', width: 'calc(100dvw - 2rem)' }}>
+          <section id="history" className="history text" aria-labelledby="history_title" hidden>
+            <div className="history-header">
+              <h2 id="history_title" className="text" style={{ fontSize: '1rem' }}>{t('Recent downloads')}</h2>
+              <button id="history_clear" type="button" className="link-button" style={{ fontSize: '0.9rem' }}>{t('Clear')}</button>
+            </div>
+            <ul id="history_list" className="history-list"></ul>
+          </section>
+        </main>
+        <footer className="home-footer">
           <div style={{ flex: '1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h1 className="text" style={{ fontSize: '1rem' }}>nZip {args.version}</h1>
+            <span className="text" style={{ fontSize: '1rem', fontWeight: 'bold' }}>nZip {args.version}</span>
           </div>
-          <a className="text" href="https://github.com/nZip-Team/nZip" target="_blank" style={{ flexShrink: '0', fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>{t('GitHub')}</a>
-        </div>
-        <script src={args.script('Home')}></script>
+          <a className="text" href="https://github.com/nZip-Team/nZip" target="_blank" rel="noopener" style={{ flexShrink: '0', fontSize: '1rem', fontWeight: 'bold', textWrap: 'nowrap' }}>{t('GitHub')}</a>
+        </footer>
+        <script type="module" src={args.script('Home')}></script>
         <script type="module" src={args.script('Preferences')}></script>
         <script type="module" src={args.script('Suggest')}></script>
-      </body>
+      </>
     )
   }
 }

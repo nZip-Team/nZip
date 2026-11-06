@@ -1,16 +1,24 @@
 import Config from '../../Config'
 
+import TTLCache from './TTLCache'
+import { isGalleryID } from './GalleryID'
+import { metadataCache } from './Metrics'
+
+const REQUEST_TIMEOUT_MS = 15000
+// Popular galleries and the first search pages are asked for many times a minute
+const CACHE_TTL_MS = 60000
+const CACHE_ENTRIES = 500
+
 export default class nh {
-  private endpoint: string = 'https://nhentai.net'
+  private endpoint: string
+  private galleries = new TTLCache<GalleryData>(CACHE_ENTRIES, CACHE_TTL_MS, (result) => metadataCache.inc({ kind: 'gallery', result }))
+  private searches = new TTLCache<SearchData>(CACHE_ENTRIES, CACHE_TTL_MS, (result) => metadataCache.inc({ kind: 'search', result }))
 
   /**
-   * Creates an instance of the nh class.
-   * @param args - Optional arguments to configure the class
-   * @param args.endpoint - The endpoint for fetching gallery data (default: 'https://nhentai.net')
+   * @param endpoint - Base URL of the gallery API
    */
-  constructor(args: { endpoint?: string; imageEndpoint?: string; thumbnailEndpoint?: string; cachePath?: string }) {
-    if (!args) return
-    if (args.endpoint) this.endpoint = args.endpoint
+  constructor(endpoint: string) {
+    this.endpoint = endpoint.replace(/\/+$/, '')
   }
 
   /**
@@ -19,7 +27,9 @@ export default class nh {
    * @returns A promise that resolves to the gallery data
    */
   public async get(id: string | number): Promise<GalleryData> {
-    return await this.fetch<GalleryData>(`${this.endpoint}/api/v2/galleries/${id}`)
+    // Interpolated into the API path, so nothing but digits may get through
+    if (!isGalleryID(id)) throw new Error(`Invalid gallery ID: ${JSON.stringify(String(id))}`)
+    return this.galleries.get(String(id), () => this.fetch<GalleryData>(`${this.endpoint}/api/v2/galleries/${id}`))
   }
 
   /**
@@ -32,38 +42,28 @@ export default class nh {
   public async search(query: string, page: number = 1, sort: SearchSort = 'date'): Promise<SearchData> {
     const params = new URLSearchParams({ query, page: String(page) })
     if (sort !== 'date') params.set('sort', sort)
-    return await this.fetch<SearchData>(`${this.endpoint}/api/v2/search?${params}`)
+    return this.searches.get(params.toString(), () => this.fetch<SearchData>(`${this.endpoint}/api/v2/search?${params}`))
   }
 
-  /**
-   * Obtains the data of a gallery from the API.
-   * @param url - The URL of the gallery to fetch data from
-   * @returns A promise that resolves to the gallery data
-   */
   private async fetch<T>(url: string): Promise<T> {
-    return new Promise((resolve, reject) => {
-      fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': `nZip/${Config.version} (+https://github.com/nZip-Team/nZip)`
-        }
-      })
-        .then(async (res) => {
-          if (!res.ok) {
-            const errorText = await res.text()
-            return reject(new Error(`HTTP error! status: ${res.status}, message: ${errorText}`))
-          }
-          return res.json() as Promise<T>
-        })
-        .then((data) => {
-          if ((data as any).error) {
-            return reject(new Error((data as any).error))
-          }
-          resolve(data as T)
-        })
-        .catch((err) => reject(err))
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': `nZip/${Config.version} (+https://github.com/nZip-Team/nZip)`
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     })
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '')
+      throw new Error(`HTTP error! status: ${res.status}, message: ${errorText.slice(0, 200)}`)
+    }
+
+    const data = (await res.json()) as T & { error?: unknown }
+    if (data && typeof data === 'object' && data.error) {
+      throw new Error(String(data.error))
+    }
+    return data
   }
 }
 
@@ -176,5 +176,4 @@ interface TagData {
   count: number
 }
 
-export { nh as nhget }
 export type { GalleryData, ImageData, TagData, SearchData, SearchResult, SearchSort }

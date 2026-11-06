@@ -7,20 +7,23 @@
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { error: string; id?: string; t: (key: string) => string }) => {
+export default (args: { error: string; id?: string; t: (key: string) => string; script: (name: string) => string }) => {
   const t = args.t
 
   return {
     title: `nZip | ${t('Error')}`,
-    description: 'Something went wrong.',
+    description: t('Something went wrong.'),
+    noindex: true,
+    bodyClass: 'page-center',
     content: (
-      <body style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--background_color)', margin: '0px', width: '100dvw', height: '100dvh' }}>
-        <div style={{ marginBottom: '1rem' }}>
+      <>
+        <main style={{ marginBottom: '1rem' }}>
           <h1 className="text" style={{ fontSize: '2.75rem' }}>{t('Error')}</h1>
-          <h1 className="text" style={{ fontSize: '1.25rem', fontWeight: 'normal', maxWidth: '90dvw' }} dangerouslySetInnerHTML={{ __html: t(args.error).replace(/\{id\}/g, args.id ?? '') }} />
-        </div>
-        <a className="text" style={{ fontSize: '1.5rem', marginTop: '0.5rem' }} href="javascript:history.back()">{t('Back')}</a>
-      </body>
+          <p className="text" style={{ fontSize: '1.25rem', fontWeight: 'normal', maxWidth: '90dvw' }} dangerouslySetInnerHTML={{ __html: t(args.error).replace(/\{id\}/g, args.id ?? '') }} />
+        </main>
+        <a className="text" style={{ fontSize: '1.5rem', marginTop: '0.5rem' }} href="/" data-back>{t('Back')}</a>
+        <script type="module" src={args.script('Back')}></script>
+      </>
     )
   }
 }

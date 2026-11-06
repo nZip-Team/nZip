@@ -92,24 +92,22 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_lastActivityAt ON sessions(lastActivityAt);
 `
 
+// sessionDSN puts the pragmas in the DSN so they apply to every pooled connection, busy_timeout first.
+// The shared DB must live on a local volume: WAL locking relies on shared memory that NFS/SMB do not provide.
+func sessionDSN(dbPath string) string {
+	return dbPath + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_txlock=immediate"
+}
+
 // NewSessionStore opens (or creates) the SQLite database at dbPath.
 func NewSessionStore(dbPath, ownerID string) (*SessionStore, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", sessionDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	db.SetMaxOpenConns(1) // SQLite is single-writer; avoid BUSY errors
 
-	if _, err = db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return nil, fmt.Errorf("set WAL: %w", err)
-	}
-	if _, err = db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
-		return nil, fmt.Errorf("set synchronous: %w", err)
-	}
-	if _, err = db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		return nil, fmt.Errorf("set busy_timeout: %w", err)
-	}
 	if _, err = db.Exec(schema); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 
@@ -147,38 +145,29 @@ func (s *SessionStore) Close() {
 	})
 }
 
+const sessionColumns = `hash,id,downloadCompleted,isDownloading,downloadingBy,
+	filename,downloadLink,lastDownloadStatus,lastPackStatus,lastLinkStatus,
+	isAborting,createdAt,lastActivityAt`
+
 // GetOrCreate returns an existing session for hash, or creates a new one.
+// One upsert statement, so replicas racing on the same hash both succeed.
 func (s *SessionStore) GetOrCreate(id, hash string) (*SharedSessionData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	existing, err := s.get(hash)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil {
-		if err := s.touch(hash); err != nil {
-			return nil, err
-		}
-		return existing, nil
-	}
-
 	now := time.Now().UnixMilli()
-	_, err = s.db.Exec(
+	row := s.db.QueryRow(
 		`INSERT INTO sessions (hash,id,downloadCompleted,isDownloading,isAborting,createdAt,lastActivityAt)
-		 VALUES (?,?,0,0,0,?,?)`,
+		 VALUES (?,?,0,0,0,?,?)
+		 ON CONFLICT(hash) DO UPDATE SET lastActivityAt=excluded.lastActivityAt
+		 RETURNING `+sessionColumns,
 		hash, id, now, now,
 	)
+	sd, err := scanSession(row)
 	if err != nil {
-		return nil, fmt.Errorf("insert session: %w", err)
+		return nil, fmt.Errorf("upsert session: %w", err)
 	}
-
-	return &SharedSessionData{
-		ID:             id,
-		Hash:           hash,
-		CreatedAt:      now,
-		LastActivityAt: now,
-	}, nil
+	return sd, nil
 }
 
 // Get returns the session for hash, or nil if not found.
@@ -190,24 +179,25 @@ func (s *SessionStore) Get(hash string) (*SharedSessionData, error) {
 
 // get is the internal (already-locked) variant.
 func (s *SessionStore) get(hash string) (*SharedSessionData, error) {
-	row := s.db.QueryRow(`SELECT
-		hash,id,downloadCompleted,isDownloading,downloadingBy,
-		filename,downloadLink,lastDownloadStatus,lastPackStatus,lastLinkStatus,
-		isAborting,createdAt,lastActivityAt
-	FROM sessions WHERE hash=?`, hash)
-
-	var sd SharedSessionData
-	var dlCompleted, isDownloading, isAborting int
-	err := row.Scan(
-		&sd.Hash, &sd.ID, &dlCompleted, &isDownloading, &sd.DownloadingBy,
-		&sd.Filename, &sd.DownloadLink, &sd.LastDownloadStatus, &sd.LastPackStatus, &sd.LastLinkStatus,
-		&isAborting, &sd.CreatedAt, &sd.LastActivityAt,
-	)
+	sd, err := scanSession(s.db.QueryRow(`SELECT `+sessionColumns+` FROM sessions WHERE hash=?`, hash))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
+	}
+	return sd, nil
+}
+
+func scanSession(row interface{ Scan(...any) error }) (*SharedSessionData, error) {
+	var sd SharedSessionData
+	var dlCompleted, isDownloading, isAborting int
+	if err := row.Scan(
+		&sd.Hash, &sd.ID, &dlCompleted, &isDownloading, &sd.DownloadingBy,
+		&sd.Filename, &sd.DownloadLink, &sd.LastDownloadStatus, &sd.LastPackStatus, &sd.LastLinkStatus,
+		&isAborting, &sd.CreatedAt, &sd.LastActivityAt,
+	); err != nil {
+		return nil, err
 	}
 	sd.DownloadCompleted = dlCompleted != 0
 	sd.IsDownloading = isDownloading != 0
@@ -312,11 +302,7 @@ func (s *SessionStore) GetAll() ([]SharedSessionData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rows, err := s.db.Query(`SELECT
-		hash,id,downloadCompleted,isDownloading,downloadingBy,
-		filename,downloadLink,lastDownloadStatus,lastPackStatus,lastLinkStatus,
-		isAborting,createdAt,lastActivityAt
-	FROM sessions`)
+	rows, err := s.db.Query(`SELECT ` + sessionColumns + ` FROM sessions`)
 	if err != nil {
 		return nil, err
 	}
@@ -324,19 +310,11 @@ func (s *SessionStore) GetAll() ([]SharedSessionData, error) {
 
 	var sessions []SharedSessionData
 	for rows.Next() {
-		var sd SharedSessionData
-		var dlCompleted, isDownloading, isAborting int
-		if err := rows.Scan(
-			&sd.Hash, &sd.ID, &dlCompleted, &isDownloading, &sd.DownloadingBy,
-			&sd.Filename, &sd.DownloadLink, &sd.LastDownloadStatus, &sd.LastPackStatus, &sd.LastLinkStatus,
-			&isAborting, &sd.CreatedAt, &sd.LastActivityAt,
-		); err != nil {
+		sd, err := scanSession(rows)
+		if err != nil {
 			return nil, err
 		}
-		sd.DownloadCompleted = dlCompleted != 0
-		sd.IsDownloading = isDownloading != 0
-		sd.IsAborting = isAborting != 0
-		sessions = append(sessions, sd)
+		sessions = append(sessions, *sd)
 	}
 	return sessions, rows.Err()
 }

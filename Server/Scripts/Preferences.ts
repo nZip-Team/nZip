@@ -1,71 +1,68 @@
+import { getCookie, setCookie, deleteCookie } from './Shared/Cookie'
+
 const preferences_button = document.getElementById('preferences_button') as HTMLButtonElement
 const preferences_modal = document.getElementById('preferences_modal') as HTMLDivElement
 const preference_blur = document.getElementById('preference_blur') as HTMLInputElement
+const preference_notify = document.getElementById('preference_notify') as HTMLInputElement
+const preference_notify_group = document.getElementById('preference_notify_group') as HTMLDivElement
+const theme_inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="preference_theme"]'))
 const language_list = document.getElementById('language_list') as HTMLDivElement
 
-function getCookie(name: string): string | null {
-  const value = `; ${document.cookie}`
-  const parts = value.split(`; ${name}=`)
-  if (parts.length === 2) return parts.pop()?.split(';').shift() || null
-  return null
-}
-
-function setCookie(name: string, value: string): void {
-  const expiryDate = new Date()
-  expiryDate.setFullYear(expiryDate.getFullYear() + 1)
-  document.cookie = `${name}=${value}; expires=${expiryDate.toUTCString()}; path=/; samesite=lax`
-}
-
-// Frame.tsx applies the no-blur class before paint
+// Frame.tsx applies the no-blur class and the theme before paint
 preference_blur.checked = getCookie('blur') !== '0'
 preference_blur.addEventListener('change', () => {
   setCookie('blur', preference_blur.checked ? '1' : '0')
   document.documentElement.classList.toggle('no-blur', !preference_blur.checked)
 })
 
-async function loadLanguages(): Promise<void> {
-  const currentLang = getCookie('language') || document.documentElement.lang.replace('-', '_') || 'en_us'
-  language_list.replaceChildren()
-
-  try {
-    const response = await fetch('/Languages')
-    const availableLanguages = (await response.json()) as { code: string; name: string; symbol: string }[]
-
-    availableLanguages.sort((a, b) => {
-      if (a.code === 'en_us') return -1
-      if (b.code === 'en_us') return 1
-      return a.name.localeCompare(b.name)
-    })
-
-    for (const lang of availableLanguages) {
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'text language-button'
-      button.textContent = `${lang.symbol} ${lang.name}`
-      button.lang = lang.code.replace('_', '-')
-      button.dataset['current'] = (currentLang === lang.code).toString()
-
-      button.addEventListener('click', () => {
-        setCookie('language', lang.code)
-        window.location.reload()
-      })
-
-      language_list.appendChild(button)
+const currentTheme = getCookie('theme')
+for (const input of theme_inputs) {
+  input.checked = input.value === (currentTheme === 'light' || currentTheme === 'dark' ? currentTheme : 'system')
+  input.addEventListener('change', () => {
+    if (!input.checked) return
+    const root = document.documentElement
+    if (input.value === 'system') {
+      deleteCookie('theme')
+      root.removeAttribute('data-theme')
+    } else {
+      setCookie('theme', input.value)
+      root.setAttribute('data-theme', input.value)
     }
-  } catch {
-    const errorText = document.createElement('p')
-    errorText.className = 'text'
-    errorText.textContent = 'Failed to load languages'
-    errorText.style.textAlign = 'center'
-    errorText.style.fontSize = '1rem'
-    language_list.appendChild(errorText)
-  }
+    const color = input.value === 'system' ? null : input.value === 'light' ? '#ffffff' : '#000000'
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+      meta.content = color ?? (meta.media.includes('light') ? '#ffffff' : '#000000')
+    })
+  })
+}
+
+// Off by default; only offered where the browser has notifications at all
+if ('Notification' in window) {
+  preference_notify_group.hidden = false
+  preference_notify.checked = getCookie('notify') === '1' && Notification.permission === 'granted'
+  preference_notify.addEventListener('change', async () => {
+    if (!preference_notify.checked) {
+      setCookie('notify', '0')
+      return
+    }
+    const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
+    preference_notify.checked = permission === 'granted'
+    setCookie('notify', preference_notify.checked ? '1' : '0')
+  })
+}
+
+// The list is rendered server-side; the current language comes marked from there
+for (const button of Array.from(language_list.querySelectorAll<HTMLButtonElement>('.language-button'))) {
+  button.addEventListener('click', () => {
+    const code = button.dataset['code']
+    if (!code) return
+    setCookie('language', code)
+    window.location.reload()
+  })
 }
 
 function openPreferences(): void {
   preferences_modal.hidden = false
   preference_blur.focus()
-  void loadLanguages()
 }
 
 function closePreferences(): void {
@@ -85,7 +82,7 @@ document.addEventListener('keydown', (event) => {
   if (event.key !== 'Tab') return
 
   // Keep Tab inside the dialog
-  const focusable = Array.from(preferences_modal.querySelectorAll<HTMLElement>('button, input, a[href]')).filter((el) => !el.hasAttribute('disabled'))
+  const focusable = Array.from(preferences_modal.querySelectorAll<HTMLElement>('button, input, a[href]')).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null)
   const first = focusable[0]
   const last = focusable[focusable.length - 1]
   if (!first || !last) return
@@ -98,5 +95,3 @@ document.addEventListener('keydown', (event) => {
     first.focus()
   }
 })
-
-export {}

@@ -9,7 +9,9 @@
     "Terms": "Conditions",
     "and": "et",
     "Privacy": "Confidentialité",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Recent downloads": "Téléchargements récents",
+    "Clear": "Effacer"
   },
   "Download": {
     "Connecting to the server...": "Connexion au serveur...",
@@ -35,7 +37,12 @@
     "Unexpected empty response from server": "Le serveur a envoyé une réponse vide",
     "Unexpected response from server": "Réponse inattendue du serveur",
     "Malformed download progress message": "Message de progression du téléchargement mal formé",
-    "Missing download link from server": "Le serveur n'a pas fourni de lien de téléchargement"
+    "Missing download link from server": "Le serveur n'a pas fourni de lien de téléchargement",
+    "Show cover": "Afficher la couverture",
+    "Copy link": "Copier le lien",
+    "Link copied": "Lien copié",
+    "Format": "Format",
+    "Ready to download": "Prêt à télécharger"
   },
   "Error": {
     "Error": "Erreur",
@@ -46,7 +53,8 @@
     "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.": "Une erreur inattendue s'est produite. Veuillez revenir à l'<a href=\"/\">accueil</a>.",
     "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.": "Le doujinshi avec l'ID {id} n'est pas disponible au téléchargement. Vous pouvez aller sur <a href=\"/g/{id}\">cette page</a> pour obtenir un nouveau lien.",
     "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.": "Ce fichier n'existe pas. Vous pouvez revenir à l'<a href=\"/\">accueil</a> pour obtenir un nouveau lien.",
-    "Too many searches, please wait a minute.": "Trop de recherches, veuillez patienter une minute."
+    "Too many searches, please wait a minute.": "Trop de recherches, veuillez patienter une minute.",
+    "Something went wrong.": "Une erreur s'est produite."
   },
   "Terms": {
     "Terms of Service": "Conditions d'utilisation",
@@ -60,7 +68,8 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "Si vous avez des questions ou des préoccupations concernant ces conditions, veuillez nous contacter à l'adresse contact [at] nhentai [dot] zip.",
     "Back": "Retour",
     "Privacy Policy": "Politique de confidentialité",
-    "DMCA Policy": "Politique DMCA"
+    "DMCA Policy": "Politique DMCA",
+    "Terms of Service of nZip": "Conditions d'utilisation de nZip"
   },
   "Privacy": {
     "Privacy Policy": "Politique de confidentialité",
@@ -75,7 +84,8 @@
     "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "En utilisant nZip, vous reconnaissez avoir lu et compris les Conditions d'utilisation et la présente Politique de confidentialité. Si vous n'acceptez pas ces conditions, veuillez vous abstenir d'utiliser le service.",
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "Si vous avez des questions ou des préoccupations concernant ces conditions, veuillez nous contacter à l'adresse contact [at] nhentai [dot] zip.",
     "Back": "Retour",
-    "Terms of Service": "Conditions d'utilisation"
+    "Terms of Service": "Conditions d'utilisation",
+    "Privacy Policy of nZip": "Politique de confidentialité de nZip"
   },
   "DMCA": {
     "DMCA Policy": "Politique DMCA",
@@ -84,7 +94,8 @@
     "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.": "Pour déposer une notification de retrait, veuillez inclure vos coordonnées, l'identification de l'œuvre protégée, l'identification du contenu prétendument contrefaisant, une déclaration de bonne foi, ainsi qu'une déclaration, sous peine de parjure, attestant que les informations fournies sont exactes.",
     "Send Notices": "Envoi des notifications",
     "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "Envoyez les notifications DMCA à contact [at] nhentai [dot] zip. Nous examinerons les notifications valides et prendrons les mesures appropriées.",
-    "Back": "Retour"
+    "Back": "Retour",
+    "DMCA policy for nZip": "Politique DMCA de nZip"
   },
   "Search": {
     "Search": "Recherche",
@@ -102,7 +113,19 @@
     "Search failed, please try again later.": "La recherche a échoué, veuillez réessayer plus tard.",
     "Packing…": "Compression…",
     "Download failed, click to try again": "Échec du téléchargement, cliquez pour réessayer",
-    "Download": "Télécharger"
+    "Download": "Télécharger",
+    "Too many searches. Please wait {seconds} seconds and try again.": "Trop de recherches. Veuillez patienter {seconds} secondes et réessayer.",
+    "Queued": "En attente",
+    "Too many downloads at once. Waiting a minute before continuing…": "Trop de téléchargements à la fois. Reprise dans une minute…",
+    "Server busy or rate limited. Try again later.": "Serveur occupé ou limite de débit atteinte. Réessayez plus tard.",
+    "{count} pages missing": "{count} pages manquantes",
+    "Download all on this page": "Tout télécharger sur cette page",
+    "Downloading this page…": "Téléchargement de la page…",
+    "Sort": "Trier",
+    "Pages": "Pages",
+    "Page number": "Numéro de page",
+    "First": "Première",
+    "Last": "Dernière"
   },
   "Preferences": {
     "Preferences": "Préférences",
@@ -110,7 +133,13 @@
     "Blur covers until clicked or hovered": "Flouter les couvertures jusqu'au clic ou survol",
     "Language": "Langue",
     "Open Pull Requests on GitHub to add your own language!": "Ouvrez des Pull Requests sur GitHub pour ajouter votre propre langue !",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Theme": "Thème",
+    "System": "Système",
+    "Dark": "Sombre",
+    "Light": "Clair",
+    "Notifications": "Notifications",
+    "Notify me when a download is ready": "M'avertir quand un téléchargement est prêt"
   },
   "Suggest": {
     "Search suggestions": "Suggestions de recherche",

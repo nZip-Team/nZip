@@ -9,6 +9,12 @@ import Log from '../Tools/Log'
 import { startInterval } from '../Tools/Interval'
 import Config from '../../Config'
 import { processID } from '../Runtime'
+import { coreCallTimeouts, coreRestarts } from '../Tools/Metrics'
+
+// Answered as soon as the core reads them; a silent core must not leave callers waiting forever
+const DEFAULT_CALL_TIMEOUT_MS = 30000
+// Run for as long as the gallery or the archive takes
+const UNTIMED_COMMANDS: ReadonlySet<string> = new Set(['download.start', 'download.packFormat', 'download.extractArchive'])
 
 export interface DownloadConfig {
   hash: string
@@ -99,6 +105,14 @@ interface PendingRequest {
   reject: (error: Error) => void
   onProgress?: (completed: number, total: number) => void
   onPackStart?: () => void
+  timer?: ReturnType<typeof setTimeout>
+}
+
+interface CallOptions {
+  onProgress?: PendingRequest['onProgress']
+  onPackStart?: PendingRequest['onPackStart']
+  /** 0 waits without a limit; the default depends on the command */
+  timeoutMs?: number
 }
 
 export class Core {
@@ -227,17 +241,20 @@ export class Core {
   }
 
   /** Send a shutdown command and wait for the process to exit. */
-  async close(): Promise<void> {
+  /**
+   * @param exitTimeoutMs How long the core may finish its jobs after acknowledging; it waits up to 60 s for them
+   */
+  async close(exitTimeoutMs = 65000): Promise<void> {
     this.suppressRestart = true
     this.intentionalClose = true
     try {
-      await this.call({ cmd: 'shutdown' })
+      await this.callStreaming({ cmd: 'shutdown' }, { timeoutMs: 5000 })
     } catch {
       // ignore - process may already be exiting
     }
     const proc = this.proc
     if (proc) {
-      await this.waitForExit(proc, 1000)
+      await this.waitForExit(proc, exitTimeoutMs)
       if (proc.exitCode === null) {
         try {
           proc.kill('SIGKILL')
@@ -248,11 +265,39 @@ export class Core {
       this.proc = null
       this.procStdin = null
     }
-    // Reject pending requests.
+    this.rejectAll(new Error('Core: closed'))
+  }
+
+  /** Whether the process is running and not being replaced */
+  isAlive(): boolean {
+    return !this.restarting && this.proc !== null && this.proc.exitCode === null && this.proc.signalCode === null
+  }
+
+  /** Round trip through the core's command loop */
+  async ping(timeoutMs = 2000): Promise<boolean> {
+    if (!this.isAlive()) return false
+    try {
+      await this.callStreaming({ cmd: 'ping' }, { timeoutMs }, 5)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private rejectAll(error: Error): void {
     for (const [, pending] of this.pending) {
-      pending.reject(new Error('Core: closed'))
+      if (pending.timer) clearTimeout(pending.timer)
+      pending.reject(error)
     }
     this.pending.clear()
+  }
+
+  private settle(reqId: string): PendingRequest | undefined {
+    const pending = this.pending.get(reqId)
+    if (!pending) return undefined
+    this.pending.delete(reqId)
+    if (pending.timer) clearTimeout(pending.timer)
+    return pending
   }
 
   nextReqId(): string {
@@ -272,23 +317,30 @@ export class Core {
    * Send a command and return a promise.  Optionally accepts callbacks for
    * streaming "progress" / "packStart" messages.
    */
-  callStreaming<T = unknown>(
-    cmdFields: Omit<GoCommand, 'reqId'>,
-    opts?: { onProgress?: PendingRequest['onProgress']; onPackStart?: PendingRequest['onPackStart'] },
-    retryCount = 0
-  ): Promise<T> {
+  callStreaming<T = unknown>(cmdFields: Omit<GoCommand, 'reqId'>, opts?: CallOptions, retryCount = 0): Promise<T> {
     return new Promise((resolve, reject) => {
       const reqId = this.nextReqId()
-      this.pending.set(reqId, {
+      const cmd = String(cmdFields['cmd'])
+      const timeoutMs = opts?.timeoutMs ?? (UNTIMED_COMMANDS.has(cmd) ? 0 : DEFAULT_CALL_TIMEOUT_MS)
+      const pending: PendingRequest = {
         resolve: resolve as (v: unknown) => void,
         reject,
         onProgress: opts?.onProgress,
-        onPackStart: opts?.onPackStart,
-      })
+        onPackStart: opts?.onPackStart
+      }
+      if (timeoutMs > 0) {
+        pending.timer = setTimeout(() => {
+          if (this.pending.get(reqId) !== pending) return
+          this.pending.delete(reqId)
+          coreCallTimeouts.inc({ cmd })
+          reject(new Error(`Core: ${cmd} timed out after ${timeoutMs} ms`))
+        }, timeoutMs)
+      }
+      this.pending.set(reqId, pending)
       try {
         this.sendRaw({ reqId, ...cmdFields } as GoCommand)
       } catch (err) {
-        this.pending.delete(reqId)
+        this.settle(reqId)
 
         if (this.shouldRetrySendError(err) && retryCount < 5 && !this.intentionalClose && !this.suppressRestart) {
           if (this.isBrokenPipeError(err)) {
@@ -338,14 +390,13 @@ export class Core {
     if (this.restarting || this.suppressRestart || this.intentionalClose) return
     this.restarting = true
 
+    coreRestarts.inc()
+
     const proc = this.proc
     this.proc = null
     this.procStdin = null
 
-    for (const [, pending] of this.pending) {
-      pending.reject(new Error(`Core: process unavailable (${reason})`))
-    }
-    this.pending.clear()
+    this.rejectAll(new Error(`Core: process unavailable (${reason})`))
 
     if (proc && proc.exitCode === null) {
       try {
@@ -356,16 +407,23 @@ export class Core {
       await this.waitForExit(proc, 500)
     }
 
+    let failed = false
     if (!this.suppressRestart && !this.intentionalClose) {
       try {
         await this.start()
         Log.info('Core: process restarted successfully')
       } catch (err) {
+        failed = true
         Log.error(`Core: failed to restart process: ${err}`)
       }
     }
 
     this.restarting = false
+
+    // Nothing else would bring it back; /healthz reports it down meanwhile
+    if (failed) {
+      setTimeout(() => void this.restartProcess('retry after a failed restart'), 5000)
+    }
   }
 
   private handleStdoutChunk(chunk: string): void {
@@ -438,7 +496,7 @@ export class Core {
     }
 
     // type === 'result'
-    this.pending.delete(resp.reqId)
+    this.settle(resp.reqId)
 
     if (!resp.ok) {
       if (resp.errorCode !== undefined) {

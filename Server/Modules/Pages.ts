@@ -4,6 +4,7 @@ import type { JSX } from 'hono/jsx/jsx-runtime'
 
 import Log from '../Tools/Log'
 import Frame from './Frame'
+import Languages, { toLocaleTag } from './Language'
 
 import _Home from '../../App/Pages/Home'
 import _Download from '../../App/Pages/Download'
@@ -17,6 +18,12 @@ type PageModule = (args?: any) => {
   title: string
   description: string
   keywords?: string
+  /** Path for canonical and og:url, when the page has one */
+  path?: string
+  /** Keep the page out of search engines */
+  noindex?: boolean
+  /** Class on <body>; pages return only what goes inside it */
+  bodyClass?: string
   content: JSX.Element
   render: (args: { analytics?: string | null; lang?: string }) => string
 }
@@ -197,12 +204,19 @@ class Pages {
 
   private addRenderer(pageModule: PageModule): PageModule {
     return (args?: any) => {
-      const page = pageModule(args)
+      // Built on first use: render() knows the language, which pages need for number formats and the language menu
+      let built: ReturnType<PageModule> | null = null
+      const build = (lang?: string) => (built ??= pageModule({ ...args, languages: Languages.getLanguageMenu(), ...(lang ? { language: lang, locale: toLocaleTag(lang) } : {}) }))
+
       return {
-        ...page,
-        render: (renderArgs: { analytics?: string | null; lang?: string }) => {
-          return Frame(page, renderArgs)
-        }
+        get title() { return build().title },
+        get description() { return build().description },
+        get keywords() { return build().keywords },
+        get path() { return build().path },
+        get noindex() { return build().noindex },
+        get bodyClass() { return build().bodyClass },
+        get content() { return build().content },
+        render: (renderArgs: { analytics?: string | null; lang?: string }) => Frame(build(renderArgs.lang), renderArgs)
       }
     }
   }

@@ -9,7 +9,9 @@
     "Terms": "Terms",
     "and": "and",
     "Privacy": "Privacy",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Recent downloads": "Recent downloads",
+    "Clear": "Clear"
   },
   "Download": {
     "Connecting to the server...": "Connecting to the server...",
@@ -35,7 +37,12 @@
     "Unexpected empty response from server": "Unexpected empty response from server",
     "Unexpected response from server": "Unexpected response from server",
     "Malformed download progress message": "Malformed download progress message",
-    "Missing download link from server": "Missing download link from server"
+    "Missing download link from server": "Missing download link from server",
+    "Show cover": "Show cover",
+    "Copy link": "Copy link",
+    "Link copied": "Link copied",
+    "Format": "Format",
+    "Ready to download": "Ready to download"
   },
   "Error": {
     "Error": "Error",
@@ -46,7 +53,8 @@
     "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.": "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.",
     "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.": "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.",
     "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.": "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.",
-    "Too many searches, please wait a minute.": "Too many searches, please wait a minute."
+    "Too many searches, please wait a minute.": "Too many searches, please wait a minute.",
+    "Something went wrong.": "Something went wrong."
   },
   "Terms": {
     "Terms of Service": "Terms of Service",
@@ -60,7 +68,8 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.",
     "Back": "Back",
     "Privacy Policy": "Privacy Policy",
-    "DMCA Policy": "DMCA Policy"
+    "DMCA Policy": "DMCA Policy",
+    "Terms of Service of nZip": "Terms of Service of nZip"
   },
   "Privacy": {
     "Privacy Policy": "Privacy Policy",
@@ -75,7 +84,8 @@
     "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.",
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.",
     "Back": "Back",
-    "Terms of Service": "Terms of Service"
+    "Terms of Service": "Terms of Service",
+    "Privacy Policy of nZip": "Privacy Policy of nZip"
   },
   "DMCA": {
     "DMCA Policy": "DMCA Policy",
@@ -84,7 +94,8 @@
     "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.": "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.",
     "Send Notices": "Send Notices",
     "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.",
-    "Back": "Back"
+    "Back": "Back",
+    "DMCA policy for nZip": "DMCA policy for nZip"
   },
   "Search": {
     "Search": "Search",
@@ -102,7 +113,19 @@
     "Search failed, please try again later.": "Search failed, please try again later.",
     "Packing…": "Packing…",
     "Download failed, click to try again": "Download failed, click to try again",
-    "Download": "Download"
+    "Download": "Download",
+    "Too many searches. Please wait {seconds} seconds and try again.": "Too many searches. Please wait {seconds} seconds and try again.",
+    "Queued": "Queued",
+    "Too many downloads at once. Waiting a minute before continuing…": "Too many downloads at once. Waiting a minute before continuing…",
+    "Server busy or rate limited. Try again later.": "Server busy or rate limited. Try again later.",
+    "{count} pages missing": "{count} pages missing",
+    "Download all on this page": "Download all on this page",
+    "Downloading this page…": "Downloading this page…",
+    "Sort": "Sort",
+    "Pages": "Pages",
+    "Page number": "Page number",
+    "First": "First",
+    "Last": "Last"
   },
   "Preferences": {
     "Preferences": "Preferences",
@@ -110,7 +133,13 @@
     "Blur covers until clicked or hovered": "Blur covers until clicked or hovered",
     "Language": "Language",
     "Open Pull Requests on GitHub to add your own language!": "Open Pull Requests on GitHub to add your own language!",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Theme": "Theme",
+    "System": "System",
+    "Dark": "Dark",
+    "Light": "Light",
+    "Notifications": "Notifications",
+    "Notify me when a download is ready": "Notify me when a download is ready"
   },
   "Suggest": {
     "Search suggestions": "Search suggestions",

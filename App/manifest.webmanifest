@@ -1,0 +1,24 @@
+{
+  "name": "nZip",
+  "short_name": "nZip",
+  "description": "Easily download the doujinshi you like.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/Images/icon.png", "sizes": "968x968", "type": "image/png", "purpose": "any" },
+    { "src": "/Images/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "share_target": {
+    "action": "/search",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "q",
+      "url": "q"
+    }
+  }
+}

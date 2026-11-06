@@ -1,6 +1,8 @@
 // Set LOG_CLIENT_SALT to keep tags stable across restarts and instances
 const clientSalt = process.env['LOG_CLIENT_SALT'] || crypto.randomUUID()
 const logClientIP = ['1', 'true', 'yes', 'on'].includes((process.env['LOG_CLIENT_IP'] || '').trim().toLowerCase())
+// One JSON object per line, for log shippers
+const logJSON = (process.env['LOG_FORMAT'] || '').trim().toLowerCase() === 'json'
 
 /**
  * Pseudonymize a client IP for logging
@@ -79,6 +81,16 @@ export default class Log {
    * @param content The content to log
    */
   private static log(type: keyof typeof types, ...content: any[]): void {
+    if (logJSON) {
+      const message = content
+        .map((part) => (typeof part === 'string' ? part : part instanceof Error ? (part.stack ?? part.message) : Bun.inspect(part)))
+        .join(' ')
+        .trim()
+      const clusterID = process.env['CLUSTER_ID']
+      console.log(JSON.stringify({ time: new Date().toISOString(), level: type, ...(clusterID !== undefined ? { worker: Number(clusterID) } : {}), msg: message }))
+      return
+    }
+
     const color = colors[type] || colors.reset
     const dateTime = this.datetime()
     const dateTimeStr = dateTime ? ` ${dateTime}` : ''

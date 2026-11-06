@@ -9,7 +9,9 @@
     "Terms": "Términos",
     "and": "y",
     "Privacy": "Privacidad",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Recent downloads": "Descargas recientes",
+    "Clear": "Borrar"
   },
   "Download": {
     "Connecting to the server...": "Conectando con el servidor...",
@@ -35,7 +37,12 @@
     "Unexpected empty response from server": "El servidor envió una respuesta vacía",
     "Unexpected response from server": "Respuesta inesperada del servidor",
     "Malformed download progress message": "Mensaje de progreso de descarga mal formado",
-    "Missing download link from server": "El servidor no proporcionó el enlace de descarga"
+    "Missing download link from server": "El servidor no proporcionó el enlace de descarga",
+    "Show cover": "Mostrar portada",
+    "Copy link": "Copiar enlace",
+    "Link copied": "Enlace copiado",
+    "Format": "Formato",
+    "Ready to download": "Listo para descargar"
   },
   "Error": {
     "Error": "Error",
@@ -46,7 +53,8 @@
     "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.": "Ocurrió un error inesperado. Vuelve al <a href=\"/\">inicio</a>.",
     "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.": "El doujinshi con ID {id} no está disponible para descargar. Puedes ir a <a href=\"/g/{id}\">esta página</a> para obtener un nuevo enlace.",
     "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.": "Ese archivo no existe. Puedes volver al <a href=\"/\">inicio</a> para obtener un nuevo enlace.",
-    "Too many searches, please wait a minute.": "Demasiadas búsquedas, espera un minuto."
+    "Too many searches, please wait a minute.": "Demasiadas búsquedas, espera un minuto.",
+    "Something went wrong.": "Algo salió mal."
   },
   "Terms": {
     "Terms of Service": "Términos del Servicio",
@@ -60,7 +68,8 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "Si tienes alguna pregunta o inquietud sobre estos términos, contáctanos en contact [at] nhentai [dot] zip.",
     "Back": "Volver",
     "Privacy Policy": "Política de Privacidad",
-    "DMCA Policy": "Política DMCA"
+    "DMCA Policy": "Política DMCA",
+    "Terms of Service of nZip": "Términos del Servicio de nZip"
   },
   "Privacy": {
     "Privacy Policy": "Política de Privacidad",
@@ -75,7 +84,8 @@
     "By using nZip, you acknowledge that you have read and understood Terms of Service and this Privacy Policy document. If you do not agree with these terms, please refrain from using the service.": "Al utilizar nZip, reconoces que has leído y comprendido los Términos del Servicio y este documento de Política de Privacidad. Si no estás de acuerdo con estos términos, te pedimos que no utilices el servicio.",
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "Si tienes alguna pregunta o inquietud sobre estos términos, contáctanos en contact [at] nhentai [dot] zip.",
     "Back": "Volver",
-    "Terms of Service": "Términos del Servicio"
+    "Terms of Service": "Términos del Servicio",
+    "Privacy Policy of nZip": "Política de Privacidad de nZip"
   },
   "DMCA": {
     "DMCA Policy": "Política DMCA",
@@ -84,7 +94,8 @@
     "To file a takedown notice, include your contact information, identification of the copyrighted work, identification of the allegedly infringing material, a statement of good-faith belief, and a statement under penalty of perjury that the information is accurate.": "Para presentar una notificación de retirada, incluye tu información de contacto, la identificación de la obra protegida, la identificación del material presuntamente infractor, una declaración de buena fe y una declaración, bajo pena de perjurio, de que la información es exacta.",
     "Send Notices": "Envío de notificaciones",
     "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "Envía las notificaciones DMCA a contact [at] nhentai [dot] zip. Revisaremos las notificaciones válidas y tomaremos las medidas oportunas.",
-    "Back": "Volver"
+    "Back": "Volver",
+    "DMCA policy for nZip": "Política DMCA de nZip"
   },
   "Search": {
     "Search": "Buscar",
@@ -102,7 +113,19 @@
     "Search failed, please try again later.": "La búsqueda falló, inténtalo de nuevo más tarde.",
     "Packing…": "Empaquetando…",
     "Download failed, click to try again": "La descarga falló, haz clic para reintentar",
-    "Download": "Descargar"
+    "Download": "Descargar",
+    "Too many searches. Please wait {seconds} seconds and try again.": "Demasiadas búsquedas. Espera {seconds} segundos e inténtalo de nuevo.",
+    "Queued": "En cola",
+    "Too many downloads at once. Waiting a minute before continuing…": "Demasiadas descargas a la vez. Esperando un minuto antes de continuar…",
+    "Server busy or rate limited. Try again later.": "Servidor ocupado o límite de solicitudes alcanzado. Inténtalo más tarde.",
+    "{count} pages missing": "Faltan {count} páginas",
+    "Download all on this page": "Descargar todo en esta página",
+    "Downloading this page…": "Descargando esta página…",
+    "Sort": "Ordenar",
+    "Pages": "Páginas",
+    "Page number": "Número de página",
+    "First": "Primera",
+    "Last": "Última"
   },
   "Preferences": {
     "Preferences": "Preferencias",
@@ -110,7 +133,13 @@
     "Blur covers until clicked or hovered": "Difuminar las portadas hasta hacer clic o pasar el cursor",
     "Language": "Idioma",
     "Open Pull Requests on GitHub to add your own language!": "¡Abre Pull Requests en GitHub para añadir tu propio idioma!",
-    "GitHub": "GitHub"
+    "GitHub": "GitHub",
+    "Theme": "Tema",
+    "System": "Sistema",
+    "Dark": "Oscuro",
+    "Light": "Claro",
+    "Notifications": "Notificaciones",
+    "Notify me when a download is ready": "Avisarme cuando una descarga esté lista"
   },
   "Suggest": {
     "Search suggestions": "Sugerencias de búsqueda",

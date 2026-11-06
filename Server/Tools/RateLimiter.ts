@@ -7,15 +7,14 @@ export default class RateLimiter {
   private maxRequests: number
   private refillIntervalMs: number
   private store: Map<string, Bucket>
-  private cleanupTimer: ReturnType<typeof setInterval>
 
   constructor(maxRequests: number, windowMs: number) {
     this.maxRequests = maxRequests
     this.refillIntervalMs = maxRequests > 0 ? windowMs / maxRequests : windowMs
     this.store = new Map()
 
-    this.cleanupTimer = setInterval(() => this.cleanup(), windowMs)
-    if (this.cleanupTimer.unref) this.cleanupTimer.unref()
+    const cleanupTimer = setInterval(() => this.cleanup(), windowMs)
+    if (cleanupTimer.unref) cleanupTimer.unref()
   }
 
   private refill(bucket: Bucket): void {
@@ -76,11 +75,6 @@ export default class RateLimiter {
         this.store.delete(key)
       }
     }
-  }
-
-  public destroy(): void {
-    clearInterval(this.cleanupTimer)
-    this.store.clear()
   }
 
   private stripZone(ip: string): string {

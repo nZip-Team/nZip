@@ -1,35 +1,7 @@
-/**
- * Update the minimum height of an element based on its children's heights
- */
-function updateDynamicMinHeight(): void {
-  const body = document.body
-  const extraHeight = body.getAttribute('data-dynamic-minheight') || '0px'
-
-  let totalHeight = 0
-
-  for (const child of Array.from(body.children) as HTMLElement[]) {
-    const bound = child.getBoundingClientRect()
-    totalHeight += bound.height
-  }
-
-  const extraHeightValue = parseFloat(extraHeight)
-  const extraHeightUnit = extraHeight.replace(/[\d.]/g, '')
-
-  let extraHeightPx = 0
-  if (extraHeightUnit === 'rem') {
-    const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize)
-    extraHeightPx = extraHeightValue * rootFontSize
-  } else if (extraHeightUnit === 'px') {
-    extraHeightPx = extraHeightValue
-  }
-
-  body.style.minHeight = `${totalHeight + extraHeightPx}px`
-}
-
-// Initialize dynamic min-height
-updateDynamicMinHeight()
-window.addEventListener('load', updateDynamicMinHeight)
-window.addEventListener('resize', updateDynamicMinHeight)
+import { getCookie, setCookie } from './Shared/Cookie'
+import { addHistory } from './Shared/History'
+import { GallerySocket, galleryWsUrl } from './Shared/Socket'
+import { onShortcuts } from './Shared/Shortcuts'
 
 type States = 'loading' | 'success' | 'error'
 
@@ -68,7 +40,7 @@ function formatElapsedTime(startTime: number): string {
   return `${minutes} ${t('min')} ${seconds} ${t('sec')}`
 }
 
-function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, state: States): void {
+function statusAnimation(Container: HTMLElement, Status: HTMLElement, state: States): void {
   if (state === 'loading') {
     Container.style.opacity = '1'
     Status.style.animation = '1s flashing infinite'
@@ -80,41 +52,42 @@ function statusAnimation(Container: HTMLDivElement, Status: HTMLDivElement, stat
   } else if (state === 'error') {
     Container.style.opacity = '1'
     Status.style.animation = ''
-    Status.style.borderColor = '#ff4444'
-    Status.style.backgroundColor = '#ff4444'
+    Status.style.borderColor = 'var(--error_color)'
+    Status.style.backgroundColor = 'var(--error_color)'
   }
 }
 
+const page_main = document.querySelector('main') as HTMLElement
 const image_cover = document.getElementById('image-cover') as HTMLImageElement
-const step_connect_container = document.getElementById('step-connect-container') as HTMLDivElement
-const step_connect_status = document.getElementById('step-connect-status') as HTMLDivElement
-const step_download_container = document.getElementById('step-download-container') as HTMLDivElement
-const step_download_status = document.getElementById('step-download-status') as HTMLDivElement
-const step_pack_container = document.getElementById('step-pack-container') as HTMLDivElement
-const step_pack_status = document.getElementById('step-pack-status') as HTMLDivElement
-const step_pack_text = document.getElementById('step-pack-text') as HTMLHeadingElement
-const step_finish_container = document.getElementById('step-finish-container') as HTMLDivElement
-const step_finish_status = document.getElementById('step-finish-status') as HTMLDivElement
-const step_finish_text = document.getElementById('step-finish-text') as HTMLHeadingElement
-const progress_text = document.getElementById('progress-text') as HTMLHeadingElement
+const cover_toggle = document.getElementById('cover-toggle') as HTMLButtonElement
+const copy_link = document.getElementById('copy-link') as HTMLButtonElement
+const step_connect_container = document.getElementById('step-connect-container') as HTMLElement
+const step_connect_status = document.getElementById('step-connect-status') as HTMLElement
+const step_download_container = document.getElementById('step-download-container') as HTMLElement
+const step_download_status = document.getElementById('step-download-status') as HTMLElement
+const step_pack_container = document.getElementById('step-pack-container') as HTMLElement
+const step_pack_status = document.getElementById('step-pack-status') as HTMLElement
+const step_pack_text = document.getElementById('step-pack-text') as HTMLElement
+const step_finish_container = document.getElementById('step-finish-container') as HTMLElement
+const step_finish_status = document.getElementById('step-finish-status') as HTMLElement
+const step_finish_text = document.getElementById('step-finish-text') as HTMLElement
+const progress_text = document.getElementById('progress-text') as HTMLElement
 const progress_format = document.getElementById('progress-format') as HTMLSelectElement
 const progress_result = document.getElementById('progress-result') as HTMLAnchorElement
+const progress_track = document.getElementById('progress-bar-track') as HTMLElement
 const progress_bar = document.getElementById('progress-bar') as HTMLDivElement
-const progress_warning = document.getElementById('progress-warning') as HTMLHeadingElement
+const progress_warning = document.getElementById('progress-warning') as HTMLElement
 const retry_button = document.getElementById('retry-button') as HTMLButtonElement
 
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const wsPath = window.location.pathname.replace(/^\/g\//, '/ws/g/')
-const wsUrl = `${wsProtocol}//${window.location.host}${wsPath}${window.location.search}`
-let socket: WebSocket
+const galleryId = page_main.dataset['id'] || window.location.pathname.replace(/^\/g\//, '').replace(/\/.*$/, '')
+const galleryTitle = page_main.dataset['title'] || galleryId
+const wsUrl = galleryWsUrl(galleryId, window.location.search)
+const baseTitle = document.title
 
-// Dropped connections are retried (a restarting server closes with 1012); server-reported errors are not
+// Dropped connections are retried (a restarting server closes with 1012); server-reported errors and refused upgrades are not
 const RECONNECT_MAX_ATTEMPTS = 20
-let shouldReconnect = true
-let reconnectAttempts = 0
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let session: GallerySocket
 
-let hasOpened = false
 let hasReceivedAnyMessage = false
 let hasTerminalState = false
 let step_download: boolean = false
@@ -133,6 +106,10 @@ let pendingPrepare:
   | null = null
 const defaultFinishText = step_finish_text.textContent || 'Finish!'
 
+// A reload or a back/forward visit already downloaded once; then the finished archive is only offered
+const navigationType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type
+let autoDownload = navigationType !== 'reload' && navigationType !== 'back_forward'
+
 function isValidFormat(format: string | null): format is typeof validFormats[number] {
   return format !== null && validFormats.includes(format as typeof validFormats[number])
 }
@@ -141,23 +118,15 @@ function isOnDemandFormat(format: string): format is typeof onDemandFormats[numb
   return onDemandFormats.includes(format as typeof onDemandFormats[number])
 }
 
-function getCookie(name: string): string | null {
-  const prefix = `${name}=`
-  for (const part of document.cookie.split(';')) {
-    const cookie = part.trim()
-    if (cookie.startsWith(prefix)) {
-      return decodeURIComponent(cookie.slice(prefix.length))
-    }
-  }
-  return null
-}
-
-function setCookie(name: string, value: string): void {
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`
-}
-
 function replaceArchiveExtension(url: string, format: string): string {
   return url.replace(/\.(zip|cbz|pdf|epub)$/i, `.${format}`)
+}
+
+/** Bar width, its progressbar value, and the percentage in the tab title while the download runs */
+function setProgress(percent: number, inTitle = true): void {
+  progress_bar.style.width = `${percent}%`
+  progress_track.setAttribute('aria-valuenow', String(Math.round(percent)))
+  document.title = inTitle ? `${Math.round(percent)}% · ${baseTitle}` : baseTitle
 }
 
 function updateDownloadHref(): void {
@@ -178,7 +147,7 @@ function setDownloadLinkEnabled(enabled: boolean): void {
   progress_result.setAttribute('aria-disabled', enabled ? 'false' : 'true')
 }
 
-function setStepDisabled(Container: HTMLDivElement, Status: HTMLDivElement): void {
+function setStepDisabled(Container: HTMLElement, Status: HTMLElement): void {
   Container.style.opacity = '0.25'
   Status.style.animation = ''
   Status.style.backgroundColor = 'transparent'
@@ -202,7 +171,7 @@ function enterPrepareUI(format: string): void {
   setStepDisabled(step_finish_container, step_finish_status)
   progress_text.textContent = completedText || '90%'
   progress_text.style.color = 'var(--text_color)'
-  progress_bar.style.width = '90%'
+  setProgress(90, false)
 }
 
 function restoreCompletedUI(format?: string): void {
@@ -212,7 +181,7 @@ function restoreCompletedUI(format?: string): void {
   statusAnimation(step_finish_container, step_finish_status, 'success')
   progress_text.textContent = completedText
   progress_text.style.color = 'var(--text_color)'
-  progress_bar.style.width = '100%'
+  setProgress(100, false)
   setDownloadLinkEnabled(true)
   isPreparingArchive = false
 }
@@ -223,8 +192,8 @@ function failPrepareUI(format: string): void {
   statusAnimation(step_pack_container, step_pack_status, 'error')
   setStepDisabled(step_finish_container, step_finish_status)
   progress_text.textContent = tFormat('Failed to prepare {format}', format)
-  progress_text.style.color = '#ff4444'
-  progress_bar.style.width = '90%'
+  progress_text.style.color = 'var(--error_color)'
+  setProgress(90, false)
   setDownloadLinkEnabled(true)
   isPreparingArchive = false
 }
@@ -233,13 +202,18 @@ function clickDownload(url: string): void {
   const a = document.createElement('a')
   a.href = url
   a.click()
+  addHistory({ id: galleryId, title: galleryTitle, format: progress_format.value })
 }
 
 function sendSocketCommand(command: Record<string, unknown>): void {
-  if (socket.readyState !== WebSocket.OPEN) {
-    throw new Error('Connection is not open')
+  session.send(command)
+}
+
+function rejectPendingPrepare(reason: string): void {
+  if (pendingPrepare) {
+    pendingPrepare.reject(new Error(reason))
+    pendingPrepare = null
   }
-  socket.send(JSON.stringify(command))
 }
 
 function handlePrepareEvent(message: { format?: string; status?: string; error?: string }): void {
@@ -380,8 +354,6 @@ progress_result.addEventListener('click', (event) => {
 setDownloadLinkEnabled(false)
 
 function setErrorState(message: string, stage: 'connect' | 'download' | 'pack'): void {
-  shouldReconnect = false
-
   if (hasTerminalState) {
     return
   }
@@ -402,27 +374,30 @@ function setErrorState(message: string, stage: 'connect' | 'download' | 'pack'):
   }
 
   progress_text.textContent = message
-  progress_text.style.color = '#ff4444'
+  progress_text.style.color = 'var(--error_color)'
+  document.title = baseTitle
   setDownloadLinkEnabled(false)
   hasTerminalState = true
   completedText = ''
   retry_button.hidden = false
+  retry_button.focus()
+}
+
+/** Error with the connection closed for good: no reconnect after a server-reported failure */
+function fail(message: string, stage: 'connect' | 'download' | 'pack'): void {
+  setErrorState(message, stage)
+  rejectPendingPrepare('Connection closed')
+  session.stop()
+}
+
+function currentStage(): 'connect' | 'download' | 'pack' {
+  return step_pack ? 'pack' : step_download ? 'download' : 'connect'
 }
 
 function resetForRetry(): void {
-  if (reconnectTimer !== null) {
-    clearTimeout(reconnectTimer)
-    reconnectTimer = null
-  }
-  if (pendingPrepare) {
-    pendingPrepare.reject(new Error('Connection was retried'))
-    pendingPrepare = null
-  }
-  socket.close()
+  rejectPendingPrepare('Connection was retried')
+  session.stop()
 
-  shouldReconnect = true
-  reconnectAttempts = 0
-  hasOpened = false
   hasReceivedAnyMessage = false
   hasTerminalState = false
   step_download = false
@@ -448,29 +423,15 @@ function resetForRetry(): void {
   step_finish_text.textContent = defaultFinishText
   progress_text.textContent = '0%'
   progress_text.style.color = 'var(--text_color)'
-  progress_bar.style.width = '0%'
+  setProgress(0, false)
 }
 
 retry_button.addEventListener('click', () => {
   resetForRetry()
+  // Asked for again, so download when ready even after a reload
+  autoDownload = true
   connect()
 })
-
-async function toBuffer(data: Blob | ArrayBuffer | string): Promise<Uint8Array | null> {
-  if (typeof data === 'string') {
-    return new TextEncoder().encode(data)
-  }
-
-  if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data)
-  }
-
-  if (data instanceof Blob) {
-    return new Uint8Array(await data.arrayBuffer())
-  }
-
-  return null
-}
 
 /** The 0x02 warning as a sentence, from the translated templates */
 function missingPagesText(payload: string): string {
@@ -490,264 +451,266 @@ function missingPagesText(payload: string): string {
   return pages.length ? `${sentence} ${fill(t('(pages {pages})'))}` : sentence
 }
 
-function scheduleReconnect(): void {
-  const delay = Math.min(1000 * 2 ** reconnectAttempts, 5000)
-  reconnectAttempts++
+/** Only when enabled in Preferences and the tab is in the background */
+function notifyReady(): void {
+  if (!('Notification' in window) || Notification.permission !== 'granted' || getCookie('notify') !== '1' || !document.hidden) return
+  try {
+    const notification = new Notification('nZip', { body: `${t('Ready to download')}: ${galleryTitle}`, icon: '/Images/icon.png', tag: `nzip-${galleryId}` })
+    notification.addEventListener('click', () => {
+      window.focus()
+      notification.close()
+    })
+  } catch {
+    // Some mobile browsers only allow notifications from a service worker
+  }
+}
 
-  if (!hasTerminalState) {
-    if (reconnectAttempts === 1) progress_text.dataset['beforeReconnect'] = progress_text.textContent || ''
-    progress_text.textContent = t('Reconnecting...')
+function handleBinary(buffer: Uint8Array): void {
+  if (buffer.length === 0) {
+    fail(t('Unexpected empty response from server'), session.opened ? 'download' : 'connect')
+    return
   }
 
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null
-    connect()
-  }, delay)
+  hasReceivedAnyMessage = true
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+
+  /**
+   * 0x00 Download progress
+   * 0x01 Download error
+   * 0x02 Warning (pages left out)
+   * 0x10 Pack progress
+   * 0x11 Pack error
+   * 0x20 Download link
+   */
+
+  if (buffer[0] === 0x00) {
+    if (buffer.length < 5) {
+      fail(t('Malformed download progress message'), 'download')
+      return
+    }
+
+    if (!step_download) {
+      statusAnimation(step_download_container, step_download_status, 'loading')
+      step_download = true
+    }
+
+    const completed = view.getUint16(1)
+    const total = view.getUint16(3)
+
+    if (total === 0) {
+      fail(t('Malformed download progress message'), 'download')
+      return
+    }
+
+    const progress = 10 + (80 / total) * completed
+    progress_text.textContent = `${Math.round(progress)}% (${completed} / ${total})`
+    setProgress(Math.min(90, progress))
+  } else if (buffer[0] === 0x01) {
+    statusAnimation(step_download_container, step_download_status, 'error')
+    step_download = false
+
+    const errorMessage = new TextDecoder().decode(buffer.slice(1)).trim()
+    fail(errorMessage || t('Download failed'), 'download')
+  } else if (buffer[0] === 0x02) {
+    progress_warning.textContent = missingPagesText(new TextDecoder().decode(buffer.slice(1)))
+    progress_warning.style.display = 'block'
+  } else if (buffer[0] === 0x10) {
+    if (step_download) {
+      statusAnimation(step_download_container, step_download_status, 'success')
+      step_download = false
+    }
+
+    if (!step_pack) {
+      statusAnimation(step_pack_container, step_pack_status, 'loading')
+      step_pack = true
+    }
+
+    progress_text.textContent = '90%'
+    setProgress(90)
+  } else if (buffer[0] === 0x11) {
+    if (step_download) {
+      statusAnimation(step_download_container, step_download_status, 'success')
+      step_download = false
+    }
+
+    statusAnimation(step_pack_container, step_pack_status, 'error')
+    step_pack = false
+
+    const errorMessage = new TextDecoder().decode(buffer.slice(1)).trim()
+    fail(errorMessage || t('Pack failed'), 'pack')
+  } else if (buffer[0] === 0x20) {
+    if (step_download) {
+      statusAnimation(step_download_container, step_download_status, 'success')
+      step_download = false
+    }
+    if (step_pack) {
+      statusAnimation(step_pack_container, step_pack_status, 'success')
+      step_pack = false
+    }
+
+    statusAnimation(step_finish_container, step_finish_status, 'success')
+
+    const url = new TextDecoder().decode(buffer.slice(1)).trim()
+    if (!url) {
+      fail(t('Missing download link from server'), 'pack')
+      return
+    }
+
+    const elapsedText = formatElapsedTime(startTime)
+    completedText = `100% (${elapsedText})`
+    syncPackTextToSelection()
+    step_finish_text.textContent = defaultFinishText
+    progress_text.textContent = completedText
+    downloadBaseUrl = url
+    updateDownloadHref()
+    setDownloadLinkEnabled(true)
+    setProgress(100, false)
+    hasTerminalState = true
+    notifyReady()
+    queueArchiveWorkflow(autoDownload)
+  } else {
+    fail(t('Unexpected response from server'), currentStage())
+  }
 }
 
 function connect(): void {
-  const current = new WebSocket(wsUrl)
-  socket = current
-  socket.binaryType = 'arraybuffer'
+  session = new GallerySocket(
+    wsUrl,
+    {
+      open: (reconnected) => {
+        if (!reconnected) {
+          startTime = Date.now()
 
-  // A retry replaces the socket; the old one's late events must not touch the new run
-  const isStale = () => socket !== current
+          step_connect_status.style.animation = ''
+          step_connect_status.style.width = '0.75rem'
+          step_connect_status.style.backgroundColor = 'var(--text_color)'
 
-  socket.addEventListener('open', () => {
-    if (isStale()) return
-    const reconnected = hasOpened
-    hasOpened = true
-    reconnectAttempts = 0
-
-    if (!reconnected) {
-      startTime = Date.now()
-
-      step_connect_status.style.animation = ''
-      step_connect_status.style.width = '0.75rem'
-      step_connect_status.style.backgroundColor = 'var(--text_color)'
-
-      progress_text.textContent = '10%'
-      progress_text.style.color = 'var(--text_color)'
-      progress_bar.style.width = '10%'
-    } else if (!hasTerminalState) {
-      progress_text.textContent = progress_text.dataset['beforeReconnect'] || progress_text.textContent
-    }
-
-    sendSocketCommand({ type: 'start' })
-
-    if (pendingPrepare) {
-      sendSocketCommand({ type: 'prepare', format: pendingPrepare.format })
-    }
-  })
-
-  socket.addEventListener('message', async (event) => {
-    if (isStale()) return
-
-    if (typeof event.data === 'string') {
-      try {
-        const message = JSON.parse(event.data) as { type?: string; format?: string; status?: string; error?: string }
-        if (message.type === 'prepare') {
-          handlePrepareEvent(message)
+          progress_text.textContent = '10%'
+          progress_text.style.color = 'var(--text_color)'
+          setProgress(10)
+        } else if (!hasTerminalState) {
+          progress_text.textContent = progress_text.dataset['beforeReconnect'] || progress_text.textContent
         }
-      } catch {
-        if (!hasTerminalState) {
-          const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
-          setErrorState(t('Failed to parse server response'), stage)
-          socket.close()
+
+        sendSocketCommand({ type: 'start' })
+
+        if (pendingPrepare) {
+          sendSocketCommand({ type: 'prepare', format: pendingPrepare.format })
         }
-      }
-      return
-    }
+      },
 
-    if (hasTerminalState) {
-      return
-    }
-
-    try {
-      const buffer = await toBuffer(event.data)
-      if (!buffer || buffer.length === 0) {
-        setErrorState(t('Unexpected empty response from server'), hasOpened ? 'download' : 'connect')
-        socket.close()
-        return
-      }
-
-      hasReceivedAnyMessage = true
-      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-
-      /**
-       * 0x00 Download progress
-       * 0x01 Download error
-       * 0x02 Warning (pages left out)
-       * 0x10 Pack progress
-       * 0x11 Pack error
-       * 0x20 Download link
-       */
-
-      if (buffer[0] === 0x00) {
-        if (buffer.length < 5) {
-          setErrorState(t('Malformed download progress message'), 'download')
-          socket.close()
+      message: (data) => {
+        if (typeof data === 'string') {
+          try {
+            const message = JSON.parse(data) as { type?: string; format?: string; status?: string; error?: string }
+            if (message.type === 'prepare') {
+              handlePrepareEvent(message)
+            }
+          } catch {
+            if (!hasTerminalState) {
+              fail(t('Failed to parse server response'), currentStage())
+            }
+          }
           return
         }
 
-        if (!step_download) {
-          statusAnimation(step_download_container, step_download_status, 'loading')
-          step_download = true
-        }
-
-        const completed = view.getUint16(1)
-        const total = view.getUint16(3)
-
-        if (total === 0) {
-          setErrorState(t('Malformed download progress message'), 'download')
-          socket.close()
+        if (hasTerminalState) {
           return
         }
 
-        const progress = 10 + (80 / total) * completed
-        progress_text.textContent = `${Math.round(progress)}% (${completed} / ${total})`
-        progress_bar.style.width = `${Math.min(90, progress)}%`
-      } else if (buffer[0] === 0x01) {
-        statusAnimation(step_download_container, step_download_status, 'error')
-        step_download = false
-
-        const errorMessage = new TextDecoder().decode(buffer.slice(1)).trim()
-        setErrorState(errorMessage || t('Download failed'), 'download')
-        socket.close()
-      } else if (buffer[0] === 0x02) {
-        progress_warning.textContent = missingPagesText(new TextDecoder().decode(buffer.slice(1)))
-        progress_warning.style.display = 'block'
-      } else if (buffer[0] === 0x10) {
-        if (step_download) {
-          statusAnimation(step_download_container, step_download_status, 'success')
-          step_download = false
+        try {
+          handleBinary(new Uint8Array(data))
+        } catch {
+          rejectPendingPrepare('Connection closed before prepare completed')
+          fail(t('Failed to parse server response'), currentStage())
         }
+      },
 
-        if (!step_pack) {
-          statusAnimation(step_pack_container, step_pack_status, 'loading')
-          step_pack = true
-        }
+      reconnecting: (attempt) => {
+        if (hasTerminalState) return
+        if (attempt === 1) progress_text.dataset['beforeReconnect'] = progress_text.textContent || ''
+        progress_text.textContent = t('Reconnecting...')
+      },
 
-        progress_text.textContent = '90%'
-        progress_bar.style.width = '90%'
-      } else if (buffer[0] === 0x11) {
-        if (step_download) {
-          statusAnimation(step_download_container, step_download_status, 'success')
-          step_download = false
-        }
+      closed: ({ opened }) => {
+        rejectPendingPrepare('Connection closed during archive preparation')
 
-        statusAnimation(step_pack_container, step_pack_status, 'error')
-        step_pack = false
-
-        const errorMessage = new TextDecoder().decode(buffer.slice(1)).trim()
-        setErrorState(errorMessage || t('Pack failed'), 'pack')
-        socket.close()
-      } else if (buffer[0] === 0x20) {
-        if (step_download) {
-          statusAnimation(step_download_container, step_download_status, 'success')
-          step_download = false
-        }
-        if (step_pack) {
-          statusAnimation(step_pack_container, step_pack_status, 'success')
-          step_pack = false
-        }
-
-        statusAnimation(step_finish_container, step_finish_status, 'success')
-
-        const url = new TextDecoder().decode(buffer.slice(1)).trim()
-        if (!url) {
-          setErrorState(t('Missing download link from server'), 'pack')
-          socket.close()
+        if (hasTerminalState) {
           return
         }
 
-        const elapsedText = formatElapsedTime(startTime)
-        completedText = `100% (${elapsedText})`
-        syncPackTextToSelection()
-        step_finish_text.textContent = defaultFinishText
-        progress_text.textContent = completedText
-        downloadBaseUrl = url
-        updateDownloadHref()
-        setDownloadLinkEnabled(true)
-        progress_bar.style.width = '100%'
-        hasTerminalState = true
-        queueArchiveWorkflow(true)
-      } else {
-        const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
-        setErrorState(t('Unexpected response from server'), stage)
-        socket.close()
+        if (!opened) {
+          // A refused upgrade (rate limit) or no server at all
+          setErrorState(t('Connection failed or rate limited'), 'connect')
+        } else if (!hasReceivedAnyMessage) {
+          setErrorState(t('Server busy or rate limited. Try again later.'), 'connect')
+        } else {
+          setErrorState(t('Connection closed before completion. Please try again.'), currentStage())
+        }
       }
-    } catch {
-      if (pendingPrepare) {
-        pendingPrepare.reject(new Error('Connection closed before prepare completed'))
-        pendingPrepare = null
-      }
-      const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
-      setErrorState(t('Failed to parse server response'), stage)
-      socket.close()
-    }
-  })
-
-  socket.addEventListener('error', () => {
-    if (isStale()) return
-
-    if (shouldReconnect && hasOpened) {
-      return
-    }
-
-    if (pendingPrepare) {
-      pendingPrepare.reject(new Error('Connection failed during archive preparation'))
-      pendingPrepare = null
-    }
-
-    if (hasTerminalState) {
-      return
-    }
-
-    const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
-    const message = hasOpened
-      ? t('Connection lost before completion. Please try again.')
-      : t('Connection failed or rate limited')
-    setErrorState(message, stage)
-  })
-
-  socket.addEventListener('close', (event) => {
-    if (isStale()) return
-
-    if (shouldReconnect && hasOpened && event.code !== 1008 && event.code !== 1011 && reconnectAttempts < RECONNECT_MAX_ATTEMPTS) {
-      scheduleReconnect()
-      return
-    }
-
-    if (pendingPrepare) {
-      pendingPrepare.reject(new Error('Connection closed during archive preparation'))
-      pendingPrepare = null
-    }
-
-    if (hasTerminalState) {
-      return
-    }
-
-    if (!hasOpened || !hasReceivedAnyMessage) {
-      setErrorState(t('Server busy or rate limited. Try again later.'), 'connect')
-      return
-    }
-
-    const stage = step_pack ? 'pack' : step_download ? 'download' : 'connect'
-    setErrorState(t('Connection closed before completion. Please try again.'), stage)
-  })
+    },
+    RECONNECT_MAX_ATTEMPTS
+  )
+  session.start()
 }
 
 connect()
 
-let blurred: boolean = true
-
-image_cover.addEventListener('click', () => {
-  image_cover.style.filter = blurred ? 'blur(0px)' : 'blur(2.5px)'
-
-  blurred = !blurred
+onShortcuts({
+  d: () => {
+    if (progress_result.getAttribute('aria-disabled') === 'true') return false
+    progress_result.click()
+  }
 })
 
-image_cover.addEventListener('load', () => {
-  window.scrollTo(0, document.body.scrollHeight)
+// Cover: blurred until hovered (CSS) or toggled; already clear with the blur preference off
+cover_toggle.setAttribute('aria-pressed', String(document.documentElement.classList.contains('no-blur')))
+cover_toggle.addEventListener('click', () => {
+  cover_toggle.setAttribute('aria-pressed', String(cover_toggle.getAttribute('aria-pressed') !== 'true'))
+})
+
+// On phones the cover can push the progress below the fold; bring it up once, unless the user already scrolled
+let userScrolled = false
+window.addEventListener('scroll', () => (userScrolled = true), { once: true, passive: true })
+
+function revealProgress(): void {
+  if (userScrolled) return
+  if (progress_track.getBoundingClientRect().bottom > window.innerHeight) progress_track.scrollIntoView({ block: 'nearest' })
+}
+
+if (image_cover.complete) revealProgress()
+else image_cover.addEventListener('load', revealProgress, { once: true })
+
+copy_link.hidden = false
+copy_link.addEventListener('click', async () => {
+  const url = `${window.location.origin}/g/${galleryId}`
+  let copied = false
+
+  try {
+    await navigator.clipboard.writeText(url)
+    copied = true
+  } catch {
+    // No clipboard API (plain HTTP, older browsers): copy from a selected field
+    const field = document.createElement('input')
+    field.value = url
+    field.readOnly = true
+    field.style.position = 'fixed'
+    field.style.opacity = '0'
+    document.body.append(field)
+    field.select()
+    try {
+      copied = document.execCommand('copy')
+    } catch {
+      copied = false
+    }
+    field.remove()
+  }
+
+  if (!copied) {
+    window.prompt(t('Copy link'), url)
+    return
+  }
+
+  copy_link.textContent = t('Link copied')
+  setTimeout(() => (copy_link.textContent = t('Copy link')), 2000)
 })
