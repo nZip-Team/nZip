@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,11 +29,34 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+// Decoders allocate from the header alone, so a tiny crafted file can OOM-kill the process.
+const (
+	maxImagePixels    = 100_000_000
+	maxImageDimension = 65_535
+)
+
 var pdfImageTypes = map[string]string{
 	"gif":  "GIF",
 	"jpeg": "JPG",
 	"jpg":  "JPG",
 	"png":  "PNG",
+}
+
+// checkImageBounds validates header dimensions before anything allocates from them.
+func checkImageBounds(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid image dimensions %dx%d", width, height)
+	}
+
+	if width > maxImageDimension || height > maxImageDimension {
+		return fmt.Errorf("image dimensions %dx%d exceed the %d pixel per-side limit", width, height, maxImageDimension)
+	}
+
+	if int64(width)*int64(height) > maxImagePixels {
+		return fmt.Errorf("image %dx%d exceeds the %d pixel limit", width, height, maxImagePixels)
+	}
+
+	return nil
 }
 
 var xmlEscaper = strings.NewReplacer(
@@ -48,6 +71,19 @@ const (
 	archiveLockPollInterval = 200 * time.Millisecond
 	archiveLockStaleAfter   = 15 * time.Minute
 )
+
+// Packing buffers whole pages in memory, so jobs queue instead of piling up.
+var packSlots = make(chan struct{}, max(1, runtime.GOMAXPROCS(0)))
+
+// acquirePackSlot blocks until a pack slot is free, or ctx is done.
+func acquirePackSlot(ctx context.Context) (func(), error) {
+	select {
+	case packSlots <- struct{}{}:
+		return func() { <-packSlots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 // packArchives creates the initial fast-path download artifacts.
 func packArchives(ctx context.Context, cfg DownloadConfig) (err error) {
@@ -300,40 +336,9 @@ func packPDF(ctx context.Context, filePaths []string, outputPath string) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-
-		data, err := os.ReadFile(src)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", src, err)
+		if err := addPDFPage(pdf, i, src); err != nil {
+			return err
 		}
-
-		cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
-		if err != nil {
-			return fmt.Errorf("decode %s: %w", src, err)
-		}
-
-		pdfData, imageType, err := normalizePDFImageData(data, format)
-		if err != nil {
-			return fmt.Errorf("prepare %s for pdf: %w", src, err)
-		}
-
-		pageSize := gofpdf.SizeType{
-			Wd: float64(cfg.Width),
-			Ht: float64(cfg.Height),
-		}
-		orientation := "P"
-		if pageSize.Wd > pageSize.Ht {
-			orientation = "L"
-		}
-
-		alias := fmt.Sprintf("page-%d", i)
-		opts := gofpdf.ImageOptions{
-			ImageType: imageType,
-			ReadDpi:   true,
-		}
-
-		pdf.AddPageFormat(orientation, pageSize)
-		pdf.RegisterImageOptionsReader(alias, opts, bytes.NewReader(pdfData))
-		pdf.ImageOptions(alias, 0, 0, pageSize.Wd, pageSize.Ht, false, opts, 0, "")
 	}
 
 	if err := pdf.Error(); err != nil {
@@ -356,6 +361,51 @@ func packPDF(ctx context.Context, filePaths []string, outputPath string) error {
 
 		return nil
 	})
+}
+
+// addPDFPage registers one image as a full-bleed page.
+func addPDFPage(pdf *gofpdf.Fpdf, index int, src string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", src, err)
+	}
+
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("decode %s: %w", src, err)
+	}
+
+	if err := checkImageBounds(cfg.Width, cfg.Height); err != nil {
+		return fmt.Errorf("reject %s: %w", src, err)
+	}
+
+	pdfData, imageType, err := normalizePDFImageData(data, format)
+	if err != nil {
+		return fmt.Errorf("prepare %s for pdf: %w", src, err)
+	}
+	data = nil
+
+	pageSize := gofpdf.SizeType{
+		Wd: float64(cfg.Width),
+		Ht: float64(cfg.Height),
+	}
+	orientation := "P"
+	if pageSize.Wd > pageSize.Ht {
+		orientation = "L"
+	}
+
+	alias := fmt.Sprintf("page-%d", index)
+	opts := gofpdf.ImageOptions{
+		ImageType: imageType,
+		ReadDpi:   true,
+	}
+
+	pdf.AddPageFormat(orientation, pageSize)
+	pdf.RegisterImageOptionsReader(alias, opts, bytes.NewReader(pdfData))
+	pdfData = nil // gofpdf owns its copy from here on
+
+	pdf.ImageOptions(alias, 0, 0, pageSize.Wd, pageSize.Ht, false, opts, 0, "")
+	return nil
 }
 
 func packEPUB(ctx context.Context, filePaths []string, outputPath, title, identifier string) error {
@@ -393,30 +443,32 @@ func packEPUB(ctx context.Context, filePaths []string, outputPath, title, identi
 				return ctx.Err()
 			}
 
-			imageName := filepath.Base(src)
-			imageType := epubMediaTypeForPath(imageName)
 			pageID := fmt.Sprintf("page-%04d", i+1)
 			pageHref := fmt.Sprintf("pages/%s.xhtml", pageID)
-			pagePath := "OEBPS/" + pageHref
+			imageID := fmt.Sprintf("img-%04d", i+1)
+			imageHref := "images/" + pageID + strings.ToLower(filepath.Ext(src))
 
-			imageBytes, err := os.ReadFile(src)
-			if err != nil {
+			// Stored, not deflated: these payloads are already compressed.
+			if err := addFileToZip(zw, src, "OEBPS/"+imageHref); err != nil {
 				_ = zw.Close()
 				_ = f.Close()
-				return fmt.Errorf("read epub image %s: %w", src, err)
+				return fmt.Errorf("write epub image %s: %w", src, err)
 			}
 
-			pageDoc := buildEPUBPageXHTML(i+1, imageName, imageType, imageBytes)
-			if err := addStringToZip(zw, pagePath, pageDoc, zip.Deflate); err != nil {
+			pageDoc := buildEPUBPageXHTML(i+1, "../"+imageHref)
+			if err := addStringToZip(zw, "OEBPS/"+pageHref, pageDoc, zip.Deflate); err != nil {
 				_ = zw.Close()
 				_ = f.Close()
 				return fmt.Errorf("write epub page %s: %w", pageID, err)
 			}
 
 			pageEntries = append(pageEntries, epubPageEntry{
-				PageID:   pageID,
-				PageHref: pageHref,
-				Label:    fmt.Sprintf("Page %d", i+1),
+				PageID:     pageID,
+				PageHref:   pageHref,
+				Label:      fmt.Sprintf("Page %d", i+1),
+				ImageID:    imageID,
+				ImageHref:  imageHref,
+				ImageMedia: epubMediaTypeForPath(imageHref),
 			})
 		}
 
@@ -445,8 +497,23 @@ func packEPUB(ctx context.Context, filePaths []string, outputPath, title, identi
 }
 
 func normalizePDFImageData(data []byte, format string) ([]byte, string, error) {
-	if imageType, ok := pdfImageTypes[strings.ToLower(format)]; ok && imageType != "PNG" {
+	format = strings.ToLower(format)
+	if imageType, ok := pdfImageTypes[format]; ok && imageType != "PNG" {
 		return data, imageType, nil
+	}
+
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", err
+	}
+
+	if err := checkImageBounds(cfg.Width, cfg.Height); err != nil {
+		return nil, "", err
+	}
+
+	// Only PNGs gofpdf cannot embed are worth a decode and re-encode.
+	if format == "png" && !pngNeedsPDFReencode(data) {
+		return data, "PNG", nil
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(data))
@@ -454,8 +521,6 @@ func normalizePDFImageData(data []byte, format string) ([]byte, string, error) {
 		return nil, "", err
 	}
 
-	// gofpdf rejects 16-bit PNG payloads, so normalize every non-JPEG/GIF
-	// image to an 8-bit RGBA PNG before embedding it into the PDF.
 	bounds := img.Bounds()
 	normalized := image.NewNRGBA(bounds)
 	draw.Draw(normalized, bounds, img, bounds.Min, draw.Src)
@@ -466,6 +531,27 @@ func normalizePDFImageData(data []byte, format string) ([]byte, string, error) {
 	}
 
 	return converted.Bytes(), "PNG", nil
+}
+
+const pngSignature = "\x89PNG\r\n\x1a\n"
+
+// pngNeedsPDFReencode reads the IHDR fields gofpdf refuses: depth over 8, interlacing, exotic colour types.
+func pngNeedsPDFReencode(data []byte) bool {
+	if len(data) < 29 || string(data[:8]) != pngSignature || string(data[12:16]) != "IHDR" {
+		return true
+	}
+
+	bitDepth, colorType, interlace := data[24], data[25], data[28]
+	if bitDepth > 8 || interlace != 0 {
+		return true
+	}
+
+	switch colorType {
+	case 0, 2, 3, 4, 6:
+		return false
+	default:
+		return true
+	}
 }
 
 func buildArchiveFile(ctx context.Context, outputPath string, build func(tmpPath string) error) error {
@@ -573,9 +659,12 @@ func isStaleArchiveLock(lockPath string) bool {
 }
 
 type epubPageEntry struct {
-	PageID   string
-	PageHref string
-	Label    string
+	PageID     string
+	PageHref   string
+	Label      string
+	ImageID    string
+	ImageHref  string
+	ImageMedia string
 }
 
 const epubContainerXML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -608,8 +697,7 @@ img {
 }
 `
 
-func buildEPUBPageXHTML(pageNumber int, imageName, imageType string, imageBytes []byte) string {
-	dataURL := "data:" + imageType + ";base64," + base64.StdEncoding.EncodeToString(imageBytes)
+func buildEPUBPageXHTML(pageNumber int, imageSrc string) string {
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
@@ -624,7 +712,7 @@ func buildEPUBPageXHTML(pageNumber int, imageName, imageType string, imageBytes 
     </div>
   </body>
 </html>
-`, pageNumber, escapeXML(dataURL), pageNumber)
+`, pageNumber, escapeXML(imageSrc), pageNumber)
 }
 
 func buildEPUBNCX(title, identifier string, entries []epubPageEntry) string {
@@ -679,7 +767,14 @@ func buildEPUBOPF(title, identifier string, entries []epubPageEntry) string {
     <dc:creator>nZip</dc:creator>
     <dc:language>en</dc:language>
     <meta name="generator" content="nZip"/>
-  </metadata>
+`)
+	// OPF 2.0 spells the cover this way; properties="cover-image" is EPUB 3.
+	if len(entries) > 0 {
+		b.WriteString(`    <meta name="cover" content="`)
+		b.WriteString(escapeXML(entries[0].ImageID))
+		b.WriteString(`"/>` + "\n")
+	}
+	b.WriteString(`  </metadata>
   <manifest>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="style" href="style.css" media-type="text/css"/>
@@ -690,6 +785,14 @@ func buildEPUBOPF(title, identifier string, entries []epubPageEntry) string {
 		b.WriteString(`" href="`)
 		b.WriteString(escapeXML(entry.PageHref))
 		b.WriteString(`" media-type="application/xhtml+xml"/>` + "\n")
+
+		b.WriteString(`    <item id="`)
+		b.WriteString(entry.ImageID)
+		b.WriteString(`" href="`)
+		b.WriteString(escapeXML(entry.ImageHref))
+		b.WriteString(`" media-type="`)
+		b.WriteString(entry.ImageMedia)
+		b.WriteString(`"/>` + "\n")
 	}
 	b.WriteString(`  </manifest>
   <spine toc="ncx">
@@ -769,4 +872,65 @@ func addFileToZip(zw *zip.Writer, src string, entryName string) error {
 
 	_, err = io.Copy(w, in)
 	return err
+}
+
+// extractArchiveImages unpacks a stored zip's images, so other formats can be packed from it.
+func extractArchiveImages(archivePath, dir string) error {
+	zr, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("open archive: %w", err)
+	}
+	defer zr.Close()
+
+	extracted := 0
+	for _, entry := range zr.File {
+		name := filepath.Base(entry.Name)
+		if entry.FileInfo().IsDir() || name != entry.Name || !isDownloadImageFile(name) {
+			continue
+		}
+
+		dest := filepath.Join(dir, name)
+		if st, err := os.Stat(dest); err == nil && st.Size() > 0 {
+			extracted++
+			continue
+		}
+
+		if err := extractZipEntry(entry, dest); err != nil {
+			return fmt.Errorf("extract %s: %w", name, err)
+		}
+		extracted++
+	}
+
+	if extracted == 0 {
+		return fmt.Errorf("no images in %s", filepath.Base(archivePath))
+	}
+
+	logInfo("Extract archive: %d image(s) from %s", extracted, filepath.Base(archivePath))
+	return nil
+}
+
+func extractZipEntry(entry *zip.File, dest string) error {
+	in, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	tmp := dest + ".extract"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+
+	return os.Rename(tmp, dest)
 }

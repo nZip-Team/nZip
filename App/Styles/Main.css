@@ -81,3 +81,220 @@ a {
     margin-top: 2rem !important;
   }
 }
+
+.search-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 1.25rem 1rem;
+}
+
+.search-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.search-card img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 5 / 7;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--text_color), var(--background_color) 90%);
+  filter: blur(2.5px);
+  transition: filter 0.3s;
+}
+
+
+.search-card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.95rem;
+}
+
+.no-blur .search-card img,
+.no-blur .cover-image {
+  filter: none !important;
+}
+
+.preference-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.preference-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.1rem 0 0;
+  accent-color: #d83e57;
+  flex-shrink: 0;
+}
+
+.preferences-button {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.preferences-button img {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  filter: brightness(0) invert(1);
+}
+
+.preferences-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.preferences-modal[hidden] {
+  display: none;
+}
+
+.preferences-modal-content {
+  max-width: 20rem;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 2rem;
+  border: 0.15rem solid var(--text_color);
+  border-radius: 0.5rem;
+  background: var(--background_color);
+}
+
+.search-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.search-card-link:hover img,
+.search-card-link:focus-visible img {
+  filter: blur(0px);
+}
+
+.search-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  opacity: 0.85;
+  font-size: 0.85rem;
+}
+
+.search-card-download {
+  min-width: 3.5rem;
+  padding: 0.15rem 0.5rem;
+  border: 0.1rem solid var(--text_color);
+  border-radius: 0.25rem;
+  background: var(--background_color);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.search-card-download:hover:not(:disabled) {
+  background: var(--text_color);
+  color: var(--background_color);
+}
+
+.search-card-download:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.suggest-anchor {
+  position: relative;
+}
+
+.suggest {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: min(24rem, 60vh);
+  overflow-y: auto;
+  padding: 0.3rem;
+  border: 0.1rem solid var(--text_color);
+  border-radius: 0.25rem;
+  background: var(--background_color);
+  text-align: left;
+}
+
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.2rem;
+  color: var(--text_color);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.suggest-item:hover,
+.suggest-item[aria-selected='true'] {
+  background: color-mix(in srgb, var(--text_color), transparent 85%);
+}
+
+.suggest-item strong,
+.suggest-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggest-item code {
+  flex: none;
+  padding: 0.1em 0.4em;
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, var(--text_color), transparent 80%);
+}
+
+.suggest-muted {
+  opacity: 0.6;
+}
+
+.suggest-badge {
+  flex: none;
+  min-width: 4.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--badge, var(--text_color)), transparent 75%);
+  color: var(--badge, var(--text_color));
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.suggest-badge[data-type='artist'] { --badge: #f0a35e; }
+.suggest-badge[data-type='group'] { --badge: #c48cf0; }
+.suggest-badge[data-type='parody'] { --badge: #6fc3f0; }
+.suggest-badge[data-type='character'] { --badge: #7ed99b; }
+.suggest-badge[data-type='language'] { --badge: #f0d36f; }
+.suggest-badge[data-type='category'] { --badge: #f07f8f; }
+
+.suggest-count {
+  flex: none;
+  margin-left: auto;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}

@@ -21,6 +21,7 @@ class Languages {
   private cachedLanguages: Record<string, LanguageData | null>
   private filePath: string
   private watcher: FSWatcher | null = null
+  private reloadCallbacks: Array<() => void> = []
 
   /**
    * Creates an instance of Languages.
@@ -88,6 +89,13 @@ class Languages {
             try {
               this.loadLanguages()
               Log.success('Languages reloaded successfully')
+              for (const callback of this.reloadCallbacks) {
+                try {
+                  callback()
+                } catch {
+                  // A listener must never break the reload.
+                }
+              }
             } catch (error) {
               Log.error('Failed to reload languages:', error)
             }
@@ -185,6 +193,14 @@ class Languages {
    */
   public reloadLanguages(): void {
     this.loadLanguages()
+  }
+
+  /**
+   * Register a callback fired after the language files are reloaded.
+   * @param callback Function called once the new translations are in place
+   */
+  public onReload(callback: () => void): void {
+    this.reloadCallbacks.push(callback)
   }
 
   /**

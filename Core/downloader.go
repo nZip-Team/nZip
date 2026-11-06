@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,7 @@ type DownloadConfig struct {
 	DownloadDir         string
 	Filename            string
 	ConcurrentDownloads int
+	MaxMissingPages     int // pages that may fail for other reasons than 404/410; 0 = max(2, 2% of the gallery)
 	Debug               bool
 	OnProgress          func(completed, total int)
 	OnPackStart         func()
@@ -30,9 +32,13 @@ type DownloadConfig struct {
 
 // DownloadResult is the final outcome of a Run call.
 type DownloadResult struct {
-	Success   bool
-	ErrorCode int // 0x01 = download error, 0x11 = pack/archive error
+	Success      bool
+	ErrorCode    int   // 0x01 = download error, 0x03 = no page available, 0x11 = pack/archive error
+	MissingPages []int // 1-based page numbers left out of the archives
 }
+
+// errPageMissing: galleries can lose images, so a 404/410 page is skipped without limit.
+var errPageMissing = errors.New("page not available")
 
 // DownloadManager tracks in-flight downloads and can abort them.
 type DownloadManager struct {
@@ -70,12 +76,15 @@ func (dm *DownloadManager) Run(cfg DownloadConfig) DownloadResult {
 	}
 
 	// Phase 1: download images.
-	if !downloadImages(ctx, cfg) {
+	missing, err := downloadImages(ctx, cfg)
+	if err != nil {
+		logErr("Download %s: %v", cfg.Hash, err)
 		return DownloadResult{ErrorCode: 0x01}
 	}
 
-	if ctx.Err() != nil {
-		return DownloadResult{ErrorCode: 0x01}
+	if len(missing) > 0 && len(missing) >= len(cfg.Images) {
+		logWarn("Download %s: none of the %d page(s) are available", cfg.Hash, len(missing))
+		return DownloadResult{ErrorCode: 0x03, MissingPages: missing}
 	}
 
 	// Phase 2: pack into the downloadable archives.
@@ -85,7 +94,7 @@ func (dm *DownloadManager) Run(cfg DownloadConfig) DownloadResult {
 		return DownloadResult{ErrorCode: 0x11}
 	}
 
-	return DownloadResult{Success: true}
+	return DownloadResult{Success: true, MissingPages: missing}
 }
 
 // Stop cancels the active download for hash (no-op if not active).
@@ -135,64 +144,144 @@ func CleanTempFiles(downloadDir, filename string) {
 }
 
 const (
-	maxRetries     = 10
-	requestTimeout = 10 * time.Second
-	retryBaseDelay = 500 * time.Millisecond
+	maxRetries                 = 4
+	requestTimeout             = 10 * time.Second
+	retryBaseDelay             = 500 * time.Millisecond
+	defaultConcurrentDownloads = 3
 )
 
-// downloadImages fetches all images in cfg.Images concurrently.
-// Returns true when all were downloaded (or already present) successfully.
-func downloadImages(ctx context.Context, cfg DownloadConfig) bool {
+// Cached per worker count so idle connections survive between galleries.
+var (
+	httpClientMu sync.Mutex
+	httpClients  = map[int]*http.Client{}
+)
+
+func downloadHTTPClient(concurrency int) *http.Client {
+	if concurrency <= 0 {
+		concurrency = defaultConcurrentDownloads
+	}
+
+	httpClientMu.Lock()
+	defer httpClientMu.Unlock()
+
+	if c, ok := httpClients[concurrency]; ok {
+		return c
+	}
+
+	c := &http.Client{
+		Timeout: requestTimeout,
+		Transport: &http.Transport{
+			Proxy:               http.ProxyFromEnvironment,
+			MaxIdleConns:        128,
+			MaxIdleConnsPerHost: concurrency,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+			ForceAttemptHTTP2:   true,
+		},
+	}
+	httpClients[concurrency] = c
+	return c
+}
+
+type downloadItem struct {
+	page int // 1-based
+	url  string
+}
+
+// missingPageBudget is how many pages may fail (other than 404/410) before the run fails.
+func missingPageBudget(cfg DownloadConfig, total int) int {
+	if cfg.MaxMissingPages > 0 {
+		return cfg.MaxMissingPages
+	}
+	return max(2, total*2/100)
+}
+
+// downloadImages returns the 1-based numbers of the pages left out. It errors on abort, or when
+// more pages failed than the budget allows; pages the host does not have (404/410) don't count.
+func downloadImages(ctx context.Context, cfg DownloadConfig) ([]int, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	total := len(cfg.Images)
 	if total == 0 {
-		return true
+		return nil, nil
 	}
 
-	queue := make(chan string, total)
-	for _, url := range cfg.Images {
-		queue <- url
+	queue := make(chan downloadItem, total)
+	for i, url := range cfg.Images {
+		queue <- downloadItem{page: i + 1, url: url}
 	}
 	close(queue)
 
-	var completed atomic.Int64
-	var failed atomic.Bool
-
-	client := &http.Client{Timeout: requestTimeout}
+	client := downloadHTTPClient(cfg.ConcurrentDownloads)
 
 	workers := cfg.ConcurrentDownloads
 	if workers <= 0 {
-		workers = 3
+		workers = defaultConcurrentDownloads
 	}
 	if workers > total {
 		workers = total
 	}
 
+	budget := missingPageBudget(cfg, total)
+
+	var (
+		completed atomic.Int64
+		mu        sync.Mutex
+		missing   []int
+		failed    int
+		exceeded  bool
+	)
+
 	var wg sync.WaitGroup
 	for range workers {
 		wg.Go(func() {
-			for url := range queue {
-				if ctx.Err() != nil || failed.Load() {
+			for item := range queue {
+				if ctx.Err() != nil {
 					return
 				}
-				if err := downloadFileWithRetry(ctx, client, url, cfg.DownloadDir); err != nil {
-					if ctx.Err() == nil {
-						logErr("Download %s: %v", url, err)
-						failed.Store(true)
-						cancel()
+				if err := downloadFileWithRetry(ctx, client, item.url, cfg.DownloadDir); err != nil {
+					if ctx.Err() != nil {
+						return
 					}
-					return
+
+					gone := errors.Is(err, errPageMissing)
+					if !gone {
+						logErr("Download page %d (%s): %v", item.page, item.url, err)
+					}
+
+					mu.Lock()
+					missing = append(missing, item.page)
+					if !gone {
+						failed++
+					}
+					over := failed > budget
+					exceeded = exceeded || over
+					mu.Unlock()
+
+					if over {
+						cancel()
+						return
+					}
 				}
-				n := int(completed.Add(1))
-				cfg.OnProgress(n, total)
+				cfg.OnProgress(int(completed.Add(1)), total)
 			}
 		})
 	}
 	wg.Wait()
 
-	return !failed.Load() && ctx.Err() == nil
+	if exceeded {
+		return nil, fmt.Errorf("%d of %d pages failed, over the limit of %d", failed, total, budget)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	slices.Sort(missing)
+	if len(missing) > 0 && len(missing) < total {
+		logWarn("Download %s: continuing without %d of %d page(s): %v", cfg.Hash, len(missing), total, missing)
+	}
+	return missing, nil
 }
 
 // downloadFileWithRetry fetches url into downloadDir, retrying on transient errors.
@@ -220,6 +309,9 @@ func downloadFileWithRetry(ctx context.Context, client *http.Client, rawURL, dir
 			}
 		}
 		if err := fetchFile(ctx, client, rawURL, dest); err != nil {
+			if statusErr, ok := errors.AsType[*httpStatusError](err); ok && (statusErr.Code == http.StatusNotFound || statusErr.Code == http.StatusGone) {
+				return fmt.Errorf("%s: %w", filename, errPageMissing)
+			}
 			lastErr = err
 			if isTemporaryError(err) {
 				continue
@@ -284,6 +376,9 @@ func isTemporaryError(err error) bool {
 	return false
 }
 
+// maxImageBytes caps what a third-party image host can write to the cache volume.
+const maxImageBytes = 64 << 20
+
 // fetchFile downloads rawURL and atomically writes it to dest.
 func fetchFile(ctx context.Context, client *http.Client, rawURL, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
@@ -302,6 +397,10 @@ func fetchFile(ctx context.Context, client *http.Client, rawURL, dest string) er
 		return &httpStatusError{Code: resp.StatusCode, URL: rawURL}
 	}
 
+	if resp.ContentLength > maxImageBytes {
+		return fmt.Errorf("image %s is %d bytes, over the %d byte limit", rawURL, resp.ContentLength, maxImageBytes)
+	}
+
 	// Write to a temp file then rename for atomicity.
 	tmp := dest + ".tmp"
 	f, err := os.Create(tmp)
@@ -309,11 +408,18 @@ func fetchFile(ctx context.Context, client *http.Client, rawURL, dest string) er
 		return err
 	}
 
-	_, err = io.Copy(f, resp.Body)
+	// One byte past the limit, so oversized bodies are detected, not truncated
+	written, err := io.Copy(f, io.LimitReader(resp.Body, maxImageBytes+1))
 	f.Close()
 	if err != nil {
 		os.Remove(tmp)
 		return err
 	}
+
+	if written > maxImageBytes {
+		os.Remove(tmp)
+		return fmt.Errorf("image %s exceeds the %d byte limit", rawURL, maxImageBytes)
+	}
+
 	return os.Rename(tmp, dest)
 }

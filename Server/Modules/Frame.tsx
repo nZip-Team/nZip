@@ -1,4 +1,9 @@
 import type { PageModule } from './Pages'
+import { LIVE_RELOAD_CLIENT } from './LiveReload'
+
+import Config from '../../Config'
+
+const NO_BLUR_SCRIPT = "if (/(?:^|;\\s*)blur=0(?:;|$)/.test(document.cookie)) document.documentElement.classList.add('no-blur')"
 
 /**
  * Frame component that wraps around each page's content to provide a consistent HTML structure.
@@ -23,8 +28,10 @@ export default (page: ReturnType<PageModule>, args: { analytics?: string | null;
 
         <link rel="icon" href="/Images/icon.ico" />
         <link rel="stylesheet" href="/Styles/Main.css" />
+        <script dangerouslySetInnerHTML={{ __html: NO_BLUR_SCRIPT }} />
       </head>
       <body>{page.content}</body>
+      {Config.development && <script dangerouslySetInnerHTML={{ __html: LIVE_RELOAD_CLIENT }}></script>}
     </html>
   ).toString()
 

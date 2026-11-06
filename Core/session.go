@@ -66,6 +66,7 @@ func (p *NullableStringPatch) UnmarshalJSON(data []byte) error {
 // SessionStore is a SQLite-backed, thread-safe session store.
 type SessionStore struct {
 	db          *sql.DB
+	ownerID     string     // this process' lock identity; empty disables lock release on close
 	mu          sync.Mutex // serialises writes; reads use their own short lock windows
 	cleanupStop chan struct{}
 	cleanupDone chan struct{}
@@ -92,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_lastActivityAt ON sessions(lastActivityAt);
 `
 
 // NewSessionStore opens (or creates) the SQLite database at dbPath.
-func NewSessionStore(dbPath string) (*SessionStore, error) {
+func NewSessionStore(dbPath, ownerID string) (*SessionStore, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
@@ -114,12 +115,15 @@ func NewSessionStore(dbPath string) (*SessionStore, error) {
 
 	s := &SessionStore{
 		db:          db,
+		ownerID:     ownerID,
 		cleanupStop: make(chan struct{}),
 		cleanupDone: make(chan struct{}),
 	}
 
-	_, _ = db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1`)
-	_, _ = db.Exec(`UPDATE sessions SET isAborting=0 WHERE isAborting=1 AND downloadCompleted=0`)
+	// Only stale locks: other instances may share this database.
+	staleCutoff := time.Now().Add(-lockStaleAfter).UnixMilli()
+	_, _ = db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1 AND lastActivityAt<?`, staleCutoff)
+	_, _ = db.Exec(`UPDATE sessions SET isAborting=0 WHERE isAborting=1 AND downloadCompleted=0 AND lastActivityAt<?`, staleCutoff)
 
 	// Start periodic cleanup (mirrors TypeScript implementation).
 	go s.startCleanupJob()
@@ -135,8 +139,10 @@ func (s *SessionStore) Close() {
 
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		// Release all active locks before close.
-		_, _ = s.db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1`)
+		// Only ours: other instances share this database
+		if s.ownerID != "" {
+			_, _ = s.db.Exec(`UPDATE sessions SET isDownloading=0, downloadingBy=NULL WHERE isDownloading=1 AND downloadingBy=?`, s.ownerID)
+		}
 		_ = s.db.Close()
 	})
 }
@@ -335,13 +341,16 @@ func (s *SessionStore) GetAll() ([]SharedSessionData, error) {
 	return sessions, rows.Err()
 }
 
+// lockStaleAfter: owners refresh every 30s, so an older lock belongs to a dead instance.
+const lockStaleAfter = 2 * time.Minute
+
 // TryAcquireLock tries to mark a session as downloading by processID.
 // Returns true only when the lock was successfully acquired.
 func (s *SessionStore) TryAcquireLock(hash, processID string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	staleCutoff := time.Now().Add(-5 * time.Minute).UnixMilli()
+	staleCutoff := time.Now().Add(-lockStaleAfter).UnixMilli()
 	res, err := s.db.Exec(
 		`UPDATE sessions
 		 SET isDownloading=1, downloadingBy=?, lastActivityAt=?, isAborting=0

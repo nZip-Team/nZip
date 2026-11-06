@@ -3,6 +3,7 @@ import { existsSync } from "fs"
 
 import Log from "./Server/Tools/Log"
 import Scripts from "./Server/Modules/Scripts"
+import Config from "./Config"
 
 await Scripts.bundle()
 
@@ -54,7 +55,7 @@ async function shutdown(signal: string) {
         Log.warn(`Force killing worker ${i}...`)
         bun.kill('SIGKILL')
         resolve()
-      }, 10000)
+      }, Config.drainTimeoutMs + 15000)
 
       bun.once('exit', () => {
         clearTimeout(timeout)

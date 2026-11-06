@@ -1,3 +1,5 @@
+import Preferences from '../Components/Preferences'
+
 /**
  * Download page
  * @param args Arguments
@@ -8,8 +10,31 @@
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { id: string, title: string, cover: string, t: (key: string) => string, script: (name: string) => string }) => {
+export default (args: { id: string, title: string, cover: string, t: (key: string) => string, tr: (section: string, key: string) => string, script: (name: string) => string }) => {
   const t = args.t
+
+  // Everything the client script sets at runtime; the markup above carries the rest
+  const clientKeys = [
+    'Preparing for {format}...',
+    'Failed to prepare {format}',
+    'Reconnecting...',
+    'sec',
+    'min',
+    'Download failed',
+    'Pack failed',
+    'Connection failed or rate limited',
+    'Connection lost before completion. Please try again.',
+    'Connection closed before completion. Please try again.',
+    'Server busy or rate limited. Try again later.',
+    'Failed to parse server response',
+    'Unexpected empty response from server',
+    'Unexpected response from server',
+    'Malformed download progress message',
+    'Missing download link from server',
+    '{count} of {total} pages are no longer available and were left out.',
+    '(pages {pages})'
+  ]
+  const i18n = Object.fromEntries(clientKeys.map((key) => [key, t(key)]))
 
   return {
     title: `nZip | ${args.id}`,
@@ -44,6 +69,7 @@ export default (args: { id: string, title: string, cover: string, t: (key: strin
                 <div style={{ width: 'calc(75% + (5rem - 2vw))' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <h1 id="progress-text" className="text" style={{ flex: '1', fontSize: '1.25rem' }}>0%</h1>
+                    <button id="retry-button" type="button" hidden className="text" style={{ flexShrink: '0', backgroundColor: 'var(--background_color)', color: 'var(--text_color)', border: '0.1rem solid var(--text_color)', borderRadius: '0.25rem', fontSize: '1rem', padding: '0.35rem 0.5rem', cursor: 'pointer' }}>{t('Retry')}</button>
                     <select id="progress-format" className="text" style={{ backgroundColor: 'var(--background_color)', color: 'var(--text_color)', border: '0.1rem solid var(--text_color)', borderRadius: '0.25rem', fontSize: '1rem', padding: '0.35rem 0.5rem' }}>
                       <option value="zip">ZIP</option>
                       <option value="cbz">CBZ</option>
@@ -55,12 +81,16 @@ export default (args: { id: string, title: string, cover: string, t: (key: strin
                   <div style={{ backgroundColor: 'color-mix(in srgb, var(--text_color), var(--background_color) 85%)', borderRadius: '1rem', width: '100%', height: '0.3rem', overflow: 'hidden' }}>
                     <div id="progress-bar" style={{ backgroundColor: 'var(--text_color)', width: '0%', height: '100%', transition: 'width 0.5s' }}></div>
                   </div>
+                  <h1 id="progress-warning" className="text" style={{ display: 'none', fontSize: '1rem', fontWeight: 'normal', color: '#ffb020', marginTop: '0.75rem' }}></h1>
                 </div>
               </div>
             </div>
           </div>
         </div>
+        <Preferences tr={args.tr} />
+        <script type="application/json" id="i18n-data" dangerouslySetInnerHTML={{ __html: JSON.stringify(i18n).replace(/</g, '\\u003c') }}></script>
         <script type="module" src={args.script('Download')}></script>
+        <script type="module" src={args.script('Preferences')}></script>
       </body>
     )
   }

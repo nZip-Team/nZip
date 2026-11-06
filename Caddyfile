@@ -1,0 +1,26 @@
+# Load balancer for compose.ha.yml
+{
+	admin off
+	auto_https off
+	servers {
+		# Keep the X-Forwarded-For from cloudflared
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	reverse_proxy nzip-a:3000 nzip-b:3000 {
+		lb_policy uri_hash
+		lb_try_duration 30s
+		lb_try_interval 250ms
+
+		# 503 while draining
+		health_uri /healthz
+		health_interval 2s
+		health_timeout 2s
+		health_status 200
+		fail_duration 10s
+
+		flush_interval -1
+	}
+}

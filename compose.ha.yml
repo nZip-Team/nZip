@@ -1,0 +1,76 @@
+# cloudflared (x2) -> Caddy -> nzip-a / nzip-b, sharing the cache volume.
+# Start with `docker compose -f compose.ha.yml up -d`; update with Scripts/rolling-update.sh,
+# never by recreating both instances at once.
+# Set TRUST_X_FORWARDED_FOR=true, TRUSTED_PROXIES to private ranges, and LOG_CLIENT_SALT so
+# both instances log the same tag for a client.
+
+x-nzip: &nzip
+  image: ${NZIP_IMAGE:-ghcr.io/nzip-team/nzip:latest}
+  environment:
+    - HOST=${HOST}
+    - PORT=3000
+    - API_URL=${API_URL}
+    - IMAGE_URL=${IMAGE_URL}
+    - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
+    - RATE_LIMIT=${RATE_LIMIT:-10}
+    - LOG_CLIENT_IP=${LOG_CLIENT_IP:-false}
+    - LOG_CLIENT_SALT=${LOG_CLIENT_SALT}
+    - TRUST_X_FORWARDED_FOR=${TRUST_X_FORWARDED_FOR}
+    - TRUSTED_PROXIES=${TRUSTED_PROXIES}
+    - ANALYTICS=${ANALYTICS}
+    - NODE_ENV=${NODE_ENV}
+    - S3_ENDPOINT=${S3_ENDPOINT}
+    - S3_BUCKET=${S3_BUCKET}
+    - S3_REGION=${S3_REGION}
+    - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+    - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+    - S3_PREFIX=${S3_PREFIX}
+    - ARCHIVE_RETENTION_DAYS=${ARCHIVE_RETENTION_DAYS}
+    - ARCHIVE_MAX_GB=${ARCHIVE_MAX_GB}
+    - DRAIN_TIMEOUT_SECONDS=${DRAIN_TIMEOUT_SECONDS}
+  volumes:
+    - nzip-cache:/workspace/Cache
+  healthcheck:
+    test: ['CMD-SHELL', 'wget -qO /dev/null http://127.0.0.1:3000/healthz || exit 1']
+    interval: 5s
+    timeout: 3s
+    start_period: 60s
+    retries: 3
+  stop_grace_period: 90s
+  restart: unless-stopped
+
+services:
+  nzip-a:
+    <<: *nzip
+    container_name: nzip-a
+
+  nzip-b:
+    <<: *nzip
+    container_name: nzip-b
+
+  nzip-lb:
+    image: caddy:2-alpine
+    container_name: nzip-lb
+    # LAN access without the tunnel
+    ports:
+      - '${NZIP_PORT:-3000}:80'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+
+  # Remotely managed tunnel: public hostname -> http://nzip-lb:80, token in TUNNEL_TOKEN
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - nzip-lb
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+
+volumes:
+  nzip-cache:
+  caddy-data:

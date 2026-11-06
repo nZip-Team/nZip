@@ -5,12 +5,14 @@ services:
     # command: ['start.sh', '4'] # Uncomment to run in cluster mode
     ports:
       - '3000:3000'
-    environment:
-      - HOST=${HOST}
-      - PORT=${PORT}
-      - API_URL=${API_URL}
-      - IMAGE_URL=${IMAGE_URL}
-      - CONCURRENT_IMAGE_DOWNLOADS=${CONCURRENT_IMAGE_DOWNLOADS}
-      - ANALYTICS=${ANALYTICS}
-      - NODE_ENV=${NODE_ENV}
+    # Every variable in .env is passed through
+    env_file:
+      - .env
+    volumes:
+      - nzip-cache:/workspace/Cache
+    # Longer than DRAIN_TIMEOUT_SECONDS
+    stop_grace_period: 90s
     restart: unless-stopped
+
+volumes:
+  nzip-cache:

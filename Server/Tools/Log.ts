@@ -1,3 +1,20 @@
+// Set LOG_CLIENT_SALT to keep tags stable across restarts and instances
+const clientSalt = process.env['LOG_CLIENT_SALT'] || crypto.randomUUID()
+const logClientIP = ['1', 'true', 'yes', 'on'].includes((process.env['LOG_CLIENT_IP'] || '').trim().toLowerCase())
+
+/**
+ * Pseudonymize a client IP for logging
+ * @param ip The client IP address
+ * @returns A salted hash tag, or the raw IP when LOG_CLIENT_IP is enabled
+ */
+export function clientTag(ip: string): string {
+  if (logClientIP) return ip
+  if (!ip || ip === 'unknown') return 'unknown'
+
+  const digest = new Bun.CryptoHasher('sha256').update(`${clientSalt}:${ip}`).digest('hex')
+  return `client:${digest.slice(0, 10)}`
+}
+
 const types = {
   info: 'Info',
   success: 'Success',

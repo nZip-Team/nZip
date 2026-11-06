@@ -10,6 +10,7 @@ class Scripts {
   private filePath = './App/Scripts/manifest.json'
   private watcher: FSWatcher | null = null
   private sourceWatcher: FSWatcher | null = null
+  private reloadCallbacks: Array<() => void> = []
   private sourceWatcherTimeout: NodeJS.Timeout | null = null
   private bundling = false
   private pendingBundle = false
@@ -92,6 +93,8 @@ class Scripts {
         this.pendingBundle = false
         await this.bundleOnce()
       } while (this.pendingBundle)
+
+      this.notifyReload()
     } finally {
       this.bundling = false
     }
@@ -139,6 +142,24 @@ class Scripts {
 
   public reloadManifest(): void {
     this.loadManifest()
+  }
+
+  /**
+   * Register a callback fired after the client bundle is rebuilt.
+   * @param callback Function called once the new manifest is in place
+   */
+  public onReload(callback: () => void): void {
+    this.reloadCallbacks.push(callback)
+  }
+
+  private notifyReload(): void {
+    for (const callback of this.reloadCallbacks) {
+      try {
+        callback()
+      } catch {
+        // A listener must never break bundling.
+      }
+    }
   }
 
   public watchSource(): void {

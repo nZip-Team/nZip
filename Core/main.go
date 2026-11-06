@@ -32,6 +32,7 @@
 //	download.hasActive   hash
 //	download.cleanTempFiles  downloadDir, filename
 //	download.packFormat  hash, downloadDir, filename, format, images
+//	download.extractArchive  downloadDir, filename
 //	shutdown
 package main
 
@@ -183,7 +184,8 @@ func main() {
 		}
 	}
 
-	store, err := NewSessionStore(dbPath)
+	// Must match the processId the server sends, or this process' locks are not released on close
+	store, err := NewSessionStore(dbPath, strings.TrimSpace(os.Getenv("NZIP_PROCESS_ID")))
 	if err != nil {
 		logErr("Open session store: %v", err)
 		os.Exit(1)
@@ -322,7 +324,7 @@ func dispatch(store *SessionStore, dm *DownloadManager, cmd Command) {
 	case "download.start":
 		concurrent := cmd.ConcurrentDownloads
 		if concurrent <= 0 {
-			concurrent = 3
+			concurrent = defaultConcurrentDownloads
 		}
 		cfg := DownloadConfig{
 			ReqID:               cmd.ReqID,
@@ -348,7 +350,7 @@ func dispatch(store *SessionStore, dm *DownloadManager, cmd Command) {
 		runAsyncCommand(cmd.ReqID, cmd.Cmd, func() {
 			result := dm.Run(cfg)
 			if result.Success {
-				ok(cmd.ReqID, map[string]bool{"success": true})
+				ok(cmd.ReqID, map[string]any{"success": true, "missingPages": result.MissingPages})
 			} else {
 				failCode(cmd.ReqID, result.ErrorCode)
 			}
@@ -371,12 +373,29 @@ func dispatch(store *SessionStore, dm *DownloadManager, cmd Command) {
 
 	case "download.packFormat":
 		runAsyncCommand(cmd.ReqID, cmd.Cmd, func() {
-			if err := packArchiveFormat(context.Background(), DownloadConfig{
+			ctx := context.Background()
+			release, err := acquirePackSlot(ctx)
+			if err != nil {
+				fail(cmd.ReqID, err.Error())
+				return
+			}
+			defer release()
+
+			if err := packArchiveFormat(ctx, DownloadConfig{
 				Hash:        cmd.Hash,
 				Images:      cmd.Images,
 				DownloadDir: cmd.DownloadDir,
 				Filename:    cmd.Filename,
 			}, cmd.Format); err != nil {
+				fail(cmd.ReqID, err.Error())
+			} else {
+				ok(cmd.ReqID, nil)
+			}
+		})
+
+	case "download.extractArchive":
+		runAsyncCommand(cmd.ReqID, cmd.Cmd, func() {
+			if err := extractArchiveImages(filepath.Join(cmd.DownloadDir, cmd.Filename), cmd.DownloadDir); err != nil {
 				fail(cmd.ReqID, err.Error())
 			} else {
 				ok(cmd.ReqID, nil)

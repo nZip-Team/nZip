@@ -1,31 +1,53 @@
 {
   "language": "繁體中文",
   "symbol": "🇹🇼",
-
   "Home": {
+    "The Sauce or a search": "神的語言或搜尋關鍵字",
     "Home": "首頁",
     "Easily download the doujinshi you like.": "輕鬆下載你喜歡的同人誌",
     "The Sauce": "神的語言",
     "Terms": "服務條款",
     "and": "與",
     "Privacy": "隱私政策",
-    "GitHub": "GitHub",
-    "Open Pull Requests on GitHub to add your own language!": "在 GitHub 上提交 Pull Requests 以添加您自己的語言！"
+    "GitHub": "GitHub"
   },
-
   "Download": {
     "Connecting to the server...": "正在連接伺服器...",
     "Downloading the images...": "正在下載圖片...",
     "Preparing for ZIP...": "正在準備 ZIP...",
     "Finish!": "完成！",
-    "Download": "下載"
+    "Download": "下載",
+    "{count} of {total} pages are no longer available and were left out.": "{total} 頁中有 {count} 頁已無法取得，已略過。",
+    "(pages {pages})": "（第 {pages} 頁）",
+    "Preparing for {format}...": "正在準備 {format}...",
+    "Failed to prepare {format}": "準備 {format} 失敗",
+    "Reconnecting...": "正在重新連線...",
+    "Retry": "重試",
+    "sec": "秒",
+    "min": "分",
+    "Download failed": "下載失敗",
+    "Pack failed": "打包失敗",
+    "Connection failed or rate limited": "連線失敗或已被限流",
+    "Connection lost before completion. Please try again.": "連線在完成前中斷，請再試一次。",
+    "Connection closed before completion. Please try again.": "連線在完成前被關閉，請再試一次。",
+    "Server busy or rate limited. Try again later.": "伺服器忙碌或已被限流，請稍後再試。",
+    "Failed to parse server response": "無法解析伺服器回應",
+    "Unexpected empty response from server": "伺服器回傳了空白回應",
+    "Unexpected response from server": "伺服器回傳了非預期的回應",
+    "Malformed download progress message": "下載進度訊息格式錯誤",
+    "Missing download link from server": "伺服器未提供下載連結"
   },
-
   "Error": {
     "Error": "錯誤",
-    "Back": "返回"
+    "Back": "返回",
+    "That's not a Number 😭": "這不是數字 😭",
+    "We cannot find this doujinshi, maybe try going back to <a href=\"/\">home</a> and try another one?": "找不到這本同人誌，要不要回到<a href=\"/\">首頁</a>再試試別本？",
+    "Something went wrong while fetching the doujinshi, please try again later or go back to <a href=\"/\">home</a>.": "取得同人誌時發生錯誤，請稍後再試，或回到<a href=\"/\">首頁</a>。",
+    "An unexpected error occurred. Please go back to <a href=\"/\">home</a>.": "發生未預期的錯誤，請回到<a href=\"/\">首頁</a>。",
+    "The doujinshi with ID {id} is not available for download. You can go to <a href=\"/g/{id}\">this page</a> and get a new link.": "ID 為 {id} 的同人誌目前無法下載。你可以前往<a href=\"/g/{id}\">此頁面</a>取得新的連結。",
+    "That file does not exist. You can go back <a href=\"/\">home</a> and get a new link.": "該檔案不存在。你可以回到<a href=\"/\">首頁</a>取得新的連結。",
+    "Too many searches, please wait a minute.": "搜尋次數過多，請等一分鐘後再試。"
   },
-
   "Terms": {
     "Terms of Service": "服務條款",
     "Content Ownership": "內容所有權",
@@ -40,7 +62,6 @@
     "Privacy Policy": "隱私政策",
     "DMCA Policy": "DMCA 政策"
   },
-
   "Privacy": {
     "Privacy Policy": "隱私政策",
     "Data We Collect": "我們收集的資料",
@@ -55,8 +76,7 @@
     "If you have any questions or concerns about these terms, please contact us at contact [at] nhentai [dot] zip.": "如果您對這些條款有任何疑問或疑慮，請透過 contact [at] nhentai [dot] zip 與我們聯繫。",
     "Back": "返回",
     "Terms of Service": "服務條款"
-  }
-  ,
+  },
   "DMCA": {
     "DMCA Policy": "DMCA 政策",
     "nZip respects the intellectual property rights of others. If you believe that your copyrighted work has been copied in a way that constitutes copyright infringement and is accessible via this project, please contact us.": "nZip 尊重他人的知識產權。如果您認為您的受版權保護的作品已被以構成侵權的方式複製並可透過本項目取得，請與我們聯絡。",
@@ -65,5 +85,54 @@
     "Send Notices": "提交通知",
     "Send DMCA notices to contact [at] nhentai [dot] zip. We will review valid notices and take appropriate action.": "請將 DMCA 通知寄至 contact [at] nhentai [dot] zip。我們會審核有效通知並採取適當措施。",
     "Back": "返回"
+  },
+  "Search": {
+    "Search": "搜尋",
+    "Search doujinshi and download them as an archive.": "搜尋本子並下載成壓縮檔。",
+    "Recent": "最新",
+    "Popular today": "今日熱門",
+    "Popular this week": "本週熱門",
+    "Popular this month": "本月熱門",
+    "Popular all time": "歷來熱門",
+    "results": "個結果",
+    "No results.": "沒有結果。",
+    "pages": "頁",
+    "Previous": "上一頁",
+    "Next": "下一頁",
+    "Search failed, please try again later.": "搜尋失敗，請稍後再試。",
+    "Packing…": "打包中…",
+    "Download failed, click to try again": "下載失敗，點擊重試",
+    "Download": "下載"
+  },
+  "Preferences": {
+    "Preferences": "偏好設定",
+    "Covers": "封面",
+    "Blur covers until clicked or hovered": "模糊封面，點擊或滑過時顯示",
+    "Language": "語言",
+    "Open Pull Requests on GitHub to add your own language!": "在 GitHub 上提交 Pull Requests 以添加您自己的語言！",
+    "GitHub": "GitHub"
+  },
+  "Suggest": {
+    "Search suggestions": "搜尋建議",
+    "Search for": "搜尋",
+    "Filter by tag": "依標籤篩選",
+    "Filter by artist": "依作者篩選",
+    "Filter by parody": "依原作篩選",
+    "Filter by character": "依角色篩選",
+    "Filter by group": "依社團篩選",
+    "Filter by language": "依語言篩選",
+    "Filter by category": "依分類篩選",
+    "Filter by page count": "依頁數篩選",
+    "Filter by favorites": "依收藏數篩選",
+    "Filter by upload date": "依上傳日期篩選",
+    "Search title text": "搜尋標題文字",
+    "Search Japanese title": "搜尋日文標題",
+    "tag": "標籤",
+    "artist": "作者",
+    "parody": "原作",
+    "character": "角色",
+    "group": "社團",
+    "language": "語言",
+    "category": "分類"
   }
 }

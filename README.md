@@ -12,6 +12,8 @@ nZip is a convenient tool for downloading doujinshi from nhentai.net as an archi
 
 2. **Direct ID Input**: Alternatively, you can enter the doujinshi ID directly on the nZip homepage to generate your archive.
 
+   Anything else you type there is a search (same syntax as nhentai, e.g. `artist:x language:english -tag:y`), served by the API at `API_URL`.
+
 3. **Download the Archive**: Once you have entered the URL or ID, it will automatically fetch the images and prepare the archive. nZip supports `zip`, `cbz`, `pdf`, and `epub` downloads.
 
 ## How nZip Works?
@@ -24,7 +26,8 @@ nZip makes a downloadable archive from a gallery code you provide. Here is the s
 - While that work is happening you see progress updates in your browser so you know what's happening.
 - When the zip is ready, nZip gives you a link to download it.
 - You can also choose `cbz`, `pdf`, or `epub` from the download page.
-- The archive is kept temporarily on the server and removed after a short time to save space.
+- The archive is kept temporarily on the server and removed after a short time to save space. With an S3 bucket configured, finished archives are kept there instead, so the next request for the same gallery is ready at once; they are evicted after `ARCHIVE_RETENTION_DAYS` without a download, and the least recently downloaded go first once the bucket passes `ARCHIVE_MAX_GB`.
+- Pages the image host no longer has are left out, and the download page says how many; a gallery with no pages left cannot be downloaded. Such incomplete archives are not kept in S3, since the pages may come back.
 - If something goes wrong, nZip shows a clear error message and you can try again.
 
 That's it - enter a code, watch progress, and download the archive in the format you want.
@@ -69,6 +72,47 @@ docker compose up -d
 ```
 
 The nZip service should now be running on port 3000.
+
+The `nzip-cache` volume holds the session database, the archive index and downloads in progress, so they survive restarts, image updates and rebuilds.
+
+### Configuration
+
+Every variable lives in `.env`.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `HOST` | `http://localhost:3000` | Public origin used to build download links |
+| `PORT` | `3000` | Port the server listens on |
+| `API_URL` | — | **Required.** Gallery API, absolute URL |
+| `IMAGE_URL` | — | **Required.** Image host, absolute URL |
+| `CONCURRENT_IMAGE_DOWNLOADS` | `16` | Parallel image fetches per gallery |
+| `RATE_LIMIT` | `10` | WebSocket upgrades per minute per client; searches get 6× this |
+| `TRUST_X_FORWARDED_FOR` | `false` | Read the client address from trusted proxies |
+| `TRUSTED_PROXIES` | — | Comma-separated IPs or CIDRs of those proxies |
+| `LOG_CLIENT_IP` | `false` | Log raw client IPs instead of salted hash tags |
+| `LOG_CLIENT_SALT` | random | Keeps the hash tags stable across restarts and instances |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PREFIX` | — | Keep finished archives in S3; without `S3_BUCKET` they stay on local disk |
+| `ARCHIVE_RETENTION_DAYS` | `7` | Days without a download before an archive is evicted from S3 (`0` = never) |
+| `ARCHIVE_MAX_GB` | `0` | Size cap for S3 archives, least recently downloaded go first (`0` = no cap) |
+| `DRAIN_TIMEOUT_SECONDS` | `60` | How long a stopping instance lets running downloads finish |
+| `ANALYTICS` | — | HTML inserted into `<head>` as is |
+| `NODE_ENV` | `development` | `development` (live reload) or `production` |
+
+**Behind a reverse proxy or CDN, set `TRUST_X_FORWARDED_FOR=true` and `TRUSTED_PROXIES`**, or every request appears to come from the proxy and all visitors share one rate-limit bucket. List only the proxies themselves: a catch-all such as `0.0.0.0/0` lets anyone pick their own address. Behind Cloudflare the address comes from `CF-Connecting-IP`; otherwise it is the last `X-Forwarded-For` entry that is not a trusted proxy.
+
+A gallery page accepts `?format=zip|cbz|pdf|epub` to preselect the archive format.
+
+### Updating without downtime
+
+[compose.ha.yml](compose.ha.yml) runs two instances that share the cache volume behind Caddy ([Caddyfile](Caddyfile)). Start it with `docker compose -f compose.ha.yml up -d`, and update with:
+
+```bash
+sh Scripts/rolling-update.sh
+```
+
+The stack also runs two `cloudflared` connectors for a Cloudflare Tunnel: create a remotely managed tunnel, point its public hostname at `http://nzip-lb:80`, and set `TUNNEL_TOKEN` in `.env`. Remove the `cloudflared` service if you put nZip behind something else.
+
+It replaces one instance at a time. A stopping instance fails its `/healthz` check, lets running downloads finish for up to `DRAIN_TIMEOUT_SECONDS`, then hands the rest over: browsers reconnect on their own and the other instance resumes from the images already downloaded.
 
 ### Using Bun
 

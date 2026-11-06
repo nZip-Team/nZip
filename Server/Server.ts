@@ -11,15 +11,18 @@ import WebSocketHandler from './WebSocket'
 
 import Config from '../Config'
 
-import NH from './Tools/nh'
+import NH, { type SearchSort } from './Tools/nh'
 import RateLimiter from './Tools/RateLimiter'
-import Log from './Tools/Log'
+import Log, { clientTag } from './Tools/Log'
+import { parseRangeHeader } from './Tools/Range'
 import { isLoopbackAddress, isTrustedProxy, loadTrustedProxies, parseIPAddress } from './Tools/TrustedProxy'
 
 import Pages, { type PageName } from './Modules/Pages'
 import Languages from './Modules/Language'
 import Scripts from './Modules/Scripts'
 import { Core } from './Modules/Core'
+import LiveReload from './Modules/LiveReload'
+import ArchiveStore from './Storage'
 
 type AppEnv = { Variables: { language: string } }
 type AppContext = Context<AppEnv>
@@ -40,13 +43,20 @@ if (Config.trustXForwardedFor && trustedProxyRules.length === 0) {
 }
 
 // In development, flush all CacheStore entries for a page when it is reloaded
-if (process.env['NODE_ENV'] === 'development') {
+if (Config.development) {
   Pages.onReload((pageName) => {
     for (const key of Array.from(CacheStore.keys())) {
       if (key.startsWith(`${pageName}:`)) CacheStore.delete(key)
     }
     Log.info(`Cache cleared for page: ${pageName}`)
+    LiveReload.broadcast('page')
   })
+  Scripts.onReload(() => LiveReload.broadcast('script'))
+  Languages.onReload(() => {
+    CacheStore.clear()
+    LiveReload.broadcast('language')
+  })
+  LiveReload.watchStyles(path.join(process.cwd(), filePath, 'Styles'))
 }
 
 const downloadDir = path.join(process.cwd(), fs.existsSync(path.join(process.cwd(), 'Server')) ? 'Server' : '', 'Cache', 'Downloads')
@@ -66,14 +76,27 @@ export default async (): Promise<() => Promise<void>> => {
   await core.start()
   const sessionStore = core.sessionStore
 
+  const archives = new ArchiveStore(downloadDir, path.dirname(downloadDir))
+  let archiveCron: Bun.CronJob | undefined
+  if (archives.remote) {
+    Log.info(`Archives are stored in S3 bucket ${Config.s3.bucket} (retention ${Config.archiveRetentionDays || '∞'} days, cap ${Config.archiveMaxGB || '∞'} GB)`)
+    archives.reconcile().catch((error) => Log.warn(`Archive index reconcile failed: ${error}`))
+
+    archiveCron = Bun.cron('17 * * * *', async () => {
+      await archives.evict().catch((error) => Log.warn(`Archive eviction failed: ${error}`))
+    })
+  }
+
   const WSHandler = new WebSocketHandler(
     nh,
     downloadDir,
     sessionStore,
-    core.downloadManager
+    core.downloadManager,
+    archives
   )
 
   const wsRateLimiter = new RateLimiter(Config.rateLimit, 60 * 1000)
+  const searchRateLimiter = new RateLimiter(Config.rateLimit * 6, 60 * 1000)
 
   analytics = Config.analytics || null
 
@@ -90,7 +113,7 @@ export default async (): Promise<() => Promise<void>> => {
       lookupQueryString: 'lang',
       lookupCookie: 'language',
       lookupFromHeaderKey: 'accept-language',
-      convertDetectedLanguage: (lang) => lang.toLowerCase().replace(/-/g, '_'),
+      convertDetectedLanguage: (lang) => matchLanguage(lang, supportedLanguages),
       caches: ['cookie'],
       cookieOptions: {
         sameSite: 'Lax',
@@ -103,22 +126,69 @@ export default async (): Promise<() => Promise<void>> => {
 
   app.use(async (c, next) => {
     c.header('X-Powered-By', `nZip ${Config.version}`)
+    // Bun loses the connection info once the response is sent
+    const ip = getIP(c)
     await next()
     c.header('X-Content-Type-Options', 'nosniff')
     c.header('X-Frame-Options', 'SAMEORIGIN')
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
     setImmediate(() => {
-      Log.info(`${c.req.method} ${c.req.path} ${c.res.status} - ${getIP(c)}`)
+      Log.info(`${c.req.method} ${c.req.path} ${c.res.status} - ${clientTag(ip)}`)
     })
   })
 
-  app.on('GET', ['/', '/home'], (c) => StaticPage(c, 'Home', { version: Config.version }))
+  // 503 while draining, so the load balancer stops routing here
+  app.get('/healthz', (c) => {
+    if (WSHandler.isDraining()) return c.text('draining', 503)
+    return c.text('ok')
+  })
+
+  app.on('GET', ['/', '/home'], (c) => StaticPage(c, 'Home', { version: Config.version, api: Config.apiHost }))
 
   app.get('/terms', (c) => StaticPage(c, 'Terms'))
 
   app.get('/privacy', (c) => StaticPage(c, 'Privacy'))
 
   app.get('/dmca', (c) => StaticPage(c, 'DMCA'))
+
+  app.get('/search', async (c) => {
+    const query = (c.req.query('q') ?? '').trim().slice(0, 200)
+    const sorts: SearchSort[] = ['date', 'popular-today', 'popular-week', 'popular-month', 'popular']
+    const sort = sorts.find((value) => value === c.req.query('sort')) ?? 'date'
+    const page = Math.min(Math.max(parseInt(c.req.query('page') ?? '1', 10) || 1, 1), 10000)
+    const empty = { query, sort, page, numPages: 0, total: 0, results: [], api: Config.apiHost }
+
+    if (!query) return Page(c, 'Search', empty)
+
+    const direct = query.match(/^(?:(?:https?:\/\/)?(?:www\.)?nhentai\.(?:net|zip)\/g\/)?(\d+)\/?$/i)
+    if (direct) return c.redirect(`/g/${direct[1]}`)
+
+    const ip = getIP(c)
+    if (!searchRateLimiter.allow(ip)) {
+      c.header('Retry-After', String(searchRateLimiter.getRetryAfterSeconds(ip) || 60))
+      c.status(429)
+      return Page(c, 'Error', { error: 'Too many searches, please wait a minute.' })
+    }
+
+    try {
+      const data = await nh.search(query, page, sort)
+      const results = data.result
+        .filter((gallery) => !gallery.blacklisted)
+        .map((gallery) => ({
+          id: gallery.id,
+          title: gallery.english_title || gallery.japanese_title || String(gallery.id),
+          thumbnail: `${Config.imageHost}/${gallery.thumbnail}`,
+          width: gallery.thumbnail_width,
+          height: gallery.thumbnail_height,
+          pages: gallery.num_pages
+        }))
+      return Page(c, 'Search', { ...empty, numPages: data.num_pages, total: data.total, results })
+    } catch (error) {
+      Log.warn(`Search failed: ${error}`)
+      c.status(502)
+      return Page(c, 'Search', { ...empty, error: Languages.translate(getLang(c), 'Search', 'Search failed, please try again later.') })
+    }
+  })
 
   app.get('/g/:id', async (c) => {
     let id = c.req.param('id')
@@ -166,6 +236,17 @@ export default async (): Promise<() => Promise<void>> => {
     return c.redirect(`/g/${id}`)
   })
 
+  if (Config.development) {
+    app.get('/dev/livereload', upgradeWebSocket(() => ({
+      onOpen: (_evt, ws) => {
+        if (ws.raw) LiveReload.add(ws.raw)
+      },
+      onClose: (_evt, ws) => {
+        if (ws.raw) LiveReload.remove(ws.raw)
+      }
+    })))
+  }
+
   app.get('/ws/g/:id', async (c, next) => {
     if (isLoopbackAddress(getConnInfo(c).remote.address)) {
       await next()
@@ -192,14 +273,15 @@ export default async (): Promise<() => Promise<void>> => {
       const filePath = sanitizePath(hash, downloadDir)
       const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
 
-      if (!filePath || !fileLoc) throw new Error('Invalid path')
+      if (!filePath || !fileLoc || path.basename(fileLoc) !== fileName || path.basename(filePath) !== hash) throw new Error('Invalid path')
 
       const archiveContentType = getArchiveContentType(fileName)
       if (!archiveContentType) throw new Error('Invalid File')
-      if (!(await Bun.file(fileLoc).exists())) throw new Error('File does not exist')
 
-      const file = Bun.file(fileLoc)
-      const fileSize = file.size
+      const archive = await archives.open(hash, fileName)
+      if (!archive) throw new Error('File does not exist')
+
+      const fileSize = archive.size
       const range = parseRangeHeader(c.req.header('Range'), fileSize)
 
       const responseHeaders: Record<string, string> = {
@@ -217,25 +299,27 @@ export default async (): Promise<() => Promise<void>> => {
         const effectiveEnd = range.end + 1
         responseHeaders['content-range'] = `bytes ${range.start}-${range.end}/${fileSize}`
         responseHeaders['content-length'] = String(effectiveEnd - range.start)
-        return new Response(file.slice(range.start, effectiveEnd), { status: 206, headers: responseHeaders })
+        return new Response(archive.stream(range.start, effectiveEnd), { status: 206, headers: responseHeaders })
       }
 
       responseHeaders['content-length'] = String(fileSize)
-      return new Response(file, { headers: responseHeaders })
+      return new Response(archive.stream(), { headers: responseHeaders })
     } catch {
       const match = fileName.match(/^\[(\d+)\](.*?)\.(zip|cbz|pdf|epub)$/i)
       c.status(404)
       let errorMessage = ''
+      let id: string | undefined
 
       if (match) {
-        const galleryID = match[1]
-        errorMessage = `The doujinshi with ID ${galleryID} is not available for download. You can go to <a href="/g/${galleryID}">this page</a> and get a new link.`
+        id = match[1]
+        errorMessage = 'The doujinshi with ID {id} is not available for download. You can go to <a href="/g/{id}">this page</a> and get a new link.'
       } else {
         errorMessage = 'That file does not exist. You can go back <a href="/">home</a> and get a new link.'
       }
 
       return Page(c, 'Error', {
-        error: errorMessage
+        error: errorMessage,
+        id
       })
     }
   })
@@ -248,12 +332,12 @@ export default async (): Promise<() => Promise<void>> => {
       const filePath = sanitizePath(hash, downloadDir)
       const fileLoc = sanitizePath(fileName, path.join(downloadDir, hash))
 
-      if (!filePath || !fileLoc) throw new Error('Invalid path')
+      if (!filePath || !fileLoc || path.basename(fileLoc) !== fileName || path.basename(filePath) !== hash) throw new Error('Invalid path')
       const archiveContentType = getArchiveContentType(fileName)
       if (!archiveContentType) throw new Error('Invalid File')
 
-      const file = Bun.file(fileLoc)
-      if (!(await file.exists())) throw new Error('File does not exist')
+      const file = await archives.open(hash, fileName)
+      if (!file) throw new Error('File does not exist')
       const range = parseRangeHeader(c.req.header('Range'), file.size)
 
       if (range.unsatisfiable) {
@@ -364,20 +448,35 @@ export default async (): Promise<() => Promise<void>> => {
   return async () => {
     Log.info('Shutting down server...')
 
-    core.prepareForShutdown()
-    
+    const deadline = Date.now() + Config.drainTimeoutMs
+    archiveCron?.stop()
+
     try {
-      server.stop(true)
-      Log.info('Server stopped')
+      await WSHandler.drain(Config.drainTimeoutMs)
+      Log.info('Running downloads drained')
     } catch (error) {
-      Log.error(`Error stopping server: ${error}`)
+      Log.error(`Error draining downloads: ${error}`)
     }
+
+    core.prepareForShutdown()
 
     try {
       await WSHandler.close()
       Log.info('WebSocket handler closed')
     } catch (error) {
       Log.error(`Error closing WebSocket handler: ${error}`)
+    }
+
+    try {
+      const remaining = Math.max(deadline - Date.now(), 1000)
+      const stopped = await Promise.race([
+        server.stop(false).then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), remaining))
+      ])
+      if (!stopped) await server.stop(true)
+      Log.info('Server stopped')
+    } catch (error) {
+      Log.error(`Error stopping server: ${error}`)
     }
 
     try {
@@ -394,6 +493,8 @@ export default async (): Promise<() => Promise<void>> => {
       Log.error(`Error closing session store: ${error}`)
     }
 
+    archives.close()
+
     try {
       Languages.shutdown()
     } catch (error) {
@@ -404,6 +505,12 @@ export default async (): Promise<() => Promise<void>> => {
       Pages.shutdown()
     } catch (error) {
       Log.error(`Error closing page watcher: ${error}`)
+    }
+
+    try {
+      LiveReload.shutdown()
+    } catch (error) {
+      Log.error(`Error closing live reload channel: ${error}`)
     }
 
     try {
@@ -426,11 +533,19 @@ export function getIP(c: Context): string {
     const remoteAddress = parseIPAddress(getConnInfo(c).remote.address)
 
     if (Config.trustXForwardedFor && remoteAddress && isTrustedProxy(remoteAddress, trustedProxyRules)) {
+      // Set by Cloudflare, not the visitor
+      const cloudflare = parseIPAddress(c.req.header('CF-Connecting-IP'))
+      if (cloudflare) {
+        return cloudflare.normalized
+      }
+
+      // Visitors can prepend their own entries: use the last address that is not our proxy
       const forwardedFor = c.req.header('X-Forwarded-For')
       if (forwardedFor) {
-        const candidate = parseIPAddress(forwardedFor.split(',')[0].trim())
-        if (candidate) {
-          return candidate.normalized
+        const chain = forwardedFor.split(',').map((entry) => parseIPAddress(entry.trim())).filter((entry) => entry !== null)
+        const visitor = [...chain].reverse().find((entry) => !isTrustedProxy(entry, trustedProxyRules)) ?? chain[0]
+        if (visitor) {
+          return visitor.normalized
         }
       }
     }
@@ -438,72 +553,6 @@ export function getIP(c: Context): string {
     return remoteAddress?.normalized || 'unknown'
   } catch {
     return 'unknown'
-  }
-}
-
-/**
- * Parse the Range header from the request
- * @param rangeHeader The Range header value
- * @returns A tuple containing the start and end of the range
- */
-function parseRangeHeader(rangeHeader: string | undefined, fileSize: number): {
-  start: number
-  end: number
-  partial: boolean
-  unsatisfiable: boolean
-} {
-  const fullRange = {
-    start: 0,
-    end: Math.max(fileSize - 1, 0),
-    partial: false,
-    unsatisfiable: false,
-  }
-
-  if (!rangeHeader || fileSize <= 0) return fullRange
-
-  try {
-    const [unit, rawRange] = rangeHeader.split('=')
-    if (unit?.trim().toLowerCase() !== 'bytes' || !rawRange) return fullRange
-
-    const [rangeValue] = rawRange.split(',')
-    const [startStr, endStr] = rangeValue.split('-').map((part) => part.trim())
-
-    if (!startStr && !endStr) return fullRange
-
-    let start = 0
-    let end = fileSize - 1
-
-    if (!startStr) {
-      const suffixLength = parseInt(endStr, 10)
-      if (isNaN(suffixLength) || suffixLength <= 0) return fullRange
-      if (suffixLength >= fileSize) return fullRange
-      start = fileSize - suffixLength
-    } else {
-      start = parseInt(startStr, 10)
-      if (isNaN(start) || start < 0) return fullRange
-      if (start >= fileSize) {
-        return {
-          ...fullRange,
-          unsatisfiable: true,
-        }
-      }
-
-      if (endStr) {
-        end = parseInt(endStr, 10)
-        if (isNaN(end) || end < start) {
-          return {
-            ...fullRange,
-            unsatisfiable: true,
-          }
-        }
-        end = Math.min(end, fileSize - 1)
-      }
-    }
-
-    const partial = start > 0 || end < fileSize - 1
-    return { start, end, partial, unsatisfiable: false }
-  } catch {
-    return fullRange
   }
 }
 
@@ -537,6 +586,27 @@ function sanitizePath(userInput: string, baseDir: string): string | null {
   }
 
   return fullPath
+}
+
+/**
+ * Map a language tag to a language file ("ja" → ja_jp, "es-MX" → es_es, "zh-Hans" → zh_cn)
+ * @param lang Language tag
+ * @param supported Available language codes
+ * @returns The matching code, or the normalized tag
+ */
+function matchLanguage(lang: string, supported: string[]): string {
+  const code = lang.toLowerCase().replace(/-/g, '_')
+  if (supported.includes(code)) return code
+
+  const [base, ...rest] = code.split('_')
+  if (base === 'zh') {
+    const traditional = rest.some((part) => ['tw', 'hk', 'mo', 'hant'].includes(part))
+    const target = traditional ? 'zh_tw' : 'zh_cn'
+    return supported.includes(target) ? target : code
+  }
+
+  const alias = base === 'in' ? 'id' : base
+  return supported.find((candidate) => candidate.split('_')[0] === alias) ?? code
 }
 
 /**
@@ -630,6 +700,7 @@ function RenderPage(c: AppContext, pagename: PageName, args?: null | Record<stri
     const Args = {
       ...args,
       t: (key: string) => Languages.translate(lang, pagename, key),
+      tr: (section: string, key: string) => Languages.translate(lang, section, key),
       script: (name: string) => Scripts.getScript(name)
     }
 

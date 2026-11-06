@@ -8,6 +8,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import Log from '../Tools/Log'
 import { startInterval } from '../Tools/Interval'
 import Config from '../../Config'
+import { processID } from '../Runtime'
 
 export interface DownloadConfig {
   hash: string
@@ -22,8 +23,9 @@ export interface DownloadConfig {
 }
 
 export type DownloadResult =
-  | { success: true }
-  | { success: false; errorCode: 0x01 | 0x11 }
+  | { success: true; missingPages?: number[] }
+  // 0x03: no page is available
+  | { success: false; errorCode: 0x01 | 0x03 | 0x11 }
 
 export interface IDownloadManager {
   run(config: DownloadConfig): Promise<DownloadResult>
@@ -32,6 +34,7 @@ export interface IDownloadManager {
   stopAll(): void
   cleanTempFiles(downloadDir: string, filename: string): void
   packFormat(downloadDir: string, filename: string, hash: string, format: string, images: string[]): Promise<void>
+  extractArchive(downloadDir: string, filename: string): Promise<void>
 }
 
 export interface SharedSessionData {
@@ -173,6 +176,7 @@ export class Core {
             ...process.env,
             DB_PATH: this.dbPath,
             NZIP_VERSION: Config.version,
+            NZIP_PROCESS_ID: processID,
           },
         })
       : spawn(this.binaryPath, [], {
@@ -181,6 +185,7 @@ export class Core {
             ...process.env,
             DB_PATH: this.dbPath,
             NZIP_VERSION: Config.version,
+            NZIP_PROCESS_ID: processID,
           },
         })
 
@@ -586,6 +591,10 @@ export class CoreDownloadManager implements IDownloadManager {
 
   async packFormat(downloadDir: string, filename: string, hash: string, format: string, images: string[]): Promise<void> {
     await this.backend.call({ cmd: 'download.packFormat', downloadDir, filename, hash, format, images })
+  }
+
+  async extractArchive(downloadDir: string, filename: string): Promise<void> {
+    await this.backend.call({ cmd: 'download.extractArchive', downloadDir, filename })
   }
 }
 
