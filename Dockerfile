@@ -3,7 +3,7 @@ ARG REVISION=unknown
 ARG CREATED=unknown
 
 # Build stages run on the runner's own platform and cross-compile, so multi-arch builds avoid QEMU
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS core-builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS core-builder
 
 ARG VERSION
 ARG TARGETOS
