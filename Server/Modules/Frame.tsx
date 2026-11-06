@@ -1,7 +1,13 @@
 import type { PageModule } from './Pages'
 import { LIVE_RELOAD_CLIENT } from './LiveReload'
 
+import { readFileSync } from 'fs'
+import path from 'path'
+
 import Config from '../../Config'
+
+// Changes with the file, so CDN and browser caches never serve an old stylesheet
+const STYLE_VERSION = Bun.hash(readFileSync(path.join(process.cwd(), 'App/Styles/Main.css'))).toString(36)
 
 const NO_BLUR_SCRIPT = "if (/(?:^|;\\s*)blur=0(?:;|$)/.test(document.cookie)) document.documentElement.classList.add('no-blur')"
 
@@ -27,7 +33,7 @@ export default (page: ReturnType<PageModule>, args: { analytics?: string | null;
         <meta charset="utf-8" />
 
         <link rel="icon" href="/Images/icon.ico" />
-        <link rel="stylesheet" href="/Styles/Main.css" />
+        <link rel="stylesheet" href={`/Styles/Main.css?v=${STYLE_VERSION}`} />
         <script dangerouslySetInnerHTML={{ __html: NO_BLUR_SCRIPT }} />
       </head>
       <body>{page.content}</body>

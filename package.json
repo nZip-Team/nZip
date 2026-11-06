@@ -1,6 +1,6 @@
 {
   "name": "nzip",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "type": "module",
   "scripts": {
     "start": "bun Main.ts",

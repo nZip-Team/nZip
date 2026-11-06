@@ -88,6 +88,19 @@ a {
   gap: 1.25rem 1rem;
 }
 
+@media (max-width: 480px) {
+  .search-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 0.75rem;
+  }
+}
+
+@media (max-height: 500px) {
+  .preferences-modal-content {
+    padding: 1rem 1.25rem;
+  }
+}
+
 .search-card {
   display: flex;
   flex-direction: column;
@@ -168,13 +181,25 @@ a {
 }
 
 .preferences-modal-content {
-  max-width: 20rem;
+  box-sizing: border-box;
+  max-width: min(20rem, calc(100vw - 2rem));
   max-height: 85dvh;
   overflow-y: auto;
   padding: 2rem;
   border: 0.15rem solid var(--text_color);
   border-radius: 0.5rem;
   background: var(--background_color);
+}
+
+/* iOS WebKit ignores background colours on native selects */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 1.8rem !important;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text_color) 50%), linear-gradient(135deg, var(--text_color) 50%, transparent 50%);
+  background-position: right 0.9rem center, right 0.6rem center;
+  background-size: 0.3rem 0.3rem;
+  background-repeat: no-repeat;
 }
 
 .search-card-link {
