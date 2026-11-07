@@ -95,5 +95,6 @@ export default {
   // Whole shutdown: drain, then running file downloads (15 s more), then the core. stop_grace_period must be longer
   shutdownBudgetMs: drainTimeoutMs + 25000,
 
-  development: process.env.NODE_ENV === 'development'
+  // Bracket access on purpose: Bun.build replaces the dot form with the build's mode, which made every image "development"
+  development: process.env['NODE_ENV'] === 'development'
 }
