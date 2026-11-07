@@ -4,6 +4,7 @@ import { getCookie } from './Shared/Cookie'
 import { addHistory } from './Shared/History'
 import { GallerySocket, galleryWsUrl } from './Shared/Socket'
 import { onShortcuts, focusField } from './Shared/Shortcuts'
+import { track } from './Shared/Track'
 
 const grid = document.querySelector<HTMLElement>('.search-grid')
 const status = document.getElementById('search-status')
@@ -27,6 +28,14 @@ function readStrings(): Record<string, string> {
 
 const strings = readStrings()
 const s = (key: string, fallback: string) => strings[key] || fallback
+
+// Rendered by App/Pages/Search.tsx: counts and the sort only, never the query text
+const shown = grid?.dataset['sort']
+if (grid && shown) {
+  track('search', { sort: shown, page: Number(grid.dataset['page']) || 1, results: Number(grid.dataset['total']) || 0, length: Number(grid.dataset['length']) || 0 })
+}
+const retryAfter = Number(grid?.dataset['retryAfter'])
+if (retryAfter > 0) track('search_rate_limited', { seconds: retryAfter })
 
 type CardState = 'idle' | 'queued' | 'running' | 'done' | 'warning' | 'error'
 
@@ -114,9 +123,17 @@ function start(button: HTMLButtonElement): void {
   const title = button.dataset['title'] || id
   const format = preferredFormat()
   const label = format.toUpperCase()
+  const gallery = Number(id)
+  const started = Date.now()
+  let pages = Number(button.dataset['pages']) || 0
+  let missing = 0
+  let stage: 'connect' | 'download' | 'pack' = 'connect'
   let link = ''
   let warning = ''
   let finished = false
+
+  // A retry after a refused upgrade continues the same download
+  if (!refusals.has(button)) track('download_start', { gallery, format, source: 'card' })
 
   running.add(button)
   setCard(button, 'running', '…')
@@ -135,13 +152,19 @@ function start(button: HTMLButtonElement): void {
   }
 
   const succeed = (url: string) => {
+    track('download_ready', { gallery, format, pages, missing, seconds: Math.round((Date.now() - started) / 100) / 10, source: 'card' })
     saveFile(url)
+    // The card click asked for it
+    track('file_download', { gallery, format, source: 'card', auto: 0 })
     addHistory({ id, title, format })
     refusals.delete(button)
     end(warning ? 'warning' : 'done', warning ? `⚠ ${label}` : label, warning)
   }
 
-  const fail = (message: string) => end('error', '!', message || s('failed', 'Download failed, click to try again'))
+  const fail = (message: string) => {
+    if (!finished) track('download_error', { gallery, format, stage, source: 'card' })
+    end('error', '!', message || s('failed', 'Download failed, click to try again'))
+  }
 
   let prepared = false
   const session = new GallerySocket(galleryWsUrl(id), {
@@ -170,17 +193,23 @@ function start(button: HTMLButtonElement): void {
 
       if (bytes[0] === 0x00 && bytes.length >= 5) {
         const view = new DataView(bytes.buffer)
+        stage = 'download'
+        if (!button.dataset['pages']) pages = view.getUint16(3)
         show(`${view.getUint16(1)}/${view.getUint16(3)}`)
       } else if (bytes[0] === 0x02) {
         const count = missingCount(text())
+        missing = count
         warning = s('missing', '{count} pages missing').replace('{count}', count ? String(count) : '?')
         setCardMessage(button, warning, 'warning')
       } else if (bytes[0] === 0x10) {
+        stage = 'pack'
         show(s('packing', '…'))
       } else if (bytes[0] === 0x01 || bytes[0] === 0x11) {
+        stage = bytes[0] === 0x01 ? 'download' : 'pack'
         fail(text())
       } else if (bytes[0] === 0x20 && !prepared) {
         prepared = true
+        stage = 'pack'
         link = text()
         if (format === 'zip') {
           succeed(link)
@@ -210,6 +239,7 @@ function start(button: HTMLButtonElement): void {
         enqueue(button, true)
       } else {
         refusals.delete(button)
+        track('download_error', { gallery, format, stage: 'rate_limited', source: 'card' })
         setCard(button, 'error', '!', s('busy', 'Server busy or rate limited. Try again later.'))
         pump()
       }
@@ -235,9 +265,9 @@ if (batch && buttons.length > 0) {
   batch.addEventListener('click', () => {
     batchRunning = true
     // Everything not already fetched in this visit
-    for (const button of buttons) {
-      if (button.dataset['state'] === 'idle' || button.dataset['state'] === 'error') enqueue(button)
-    }
+    const pending = buttons.filter((button) => button.dataset['state'] === 'idle' || button.dataset['state'] === 'error')
+    track('batch_download', { count: pending.length, format: preferredFormat() })
+    pending.forEach((button) => enqueue(button))
   })
 }
 

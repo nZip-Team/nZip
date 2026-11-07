@@ -1,5 +1,7 @@
 // Single-key shortcuts, ignored while typing, with Ctrl/Alt/Meta held, or while the preferences dialog is open
 
+import { track } from './Track'
+
 function isTyping(element: Element | null): boolean {
   if (!element) return false
   if (element instanceof HTMLElement && element.isContentEditable) return true
@@ -14,7 +16,10 @@ export function onShortcuts(actions: Record<string, () => boolean | void>): void
     if (document.getElementById('preferences_modal')?.hidden === false) return
 
     const action = actions[event.key]
-    if (action && action() !== false) event.preventDefault()
+    if (action && action() !== false) {
+      event.preventDefault()
+      track('shortcut', { key: event.key })
+    }
   })
 }
 

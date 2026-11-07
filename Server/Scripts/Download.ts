@@ -2,6 +2,7 @@ import { getCookie, setCookie } from './Shared/Cookie'
 import { addHistory } from './Shared/History'
 import { GallerySocket, galleryWsUrl } from './Shared/Socket'
 import { onShortcuts } from './Shared/Shortcuts'
+import { track } from './Shared/Track'
 
 type States = 'loading' | 'success' | 'error'
 
@@ -81,6 +82,8 @@ const retry_button = document.getElementById('retry-button') as HTMLButtonElemen
 
 const galleryId = page_main.dataset['id'] || window.location.pathname.replace(/^\/g\//, '').replace(/\/.*$/, '')
 const galleryTitle = page_main.dataset['title'] || galleryId
+const gallery = Number(galleryId)
+const galleryPages = Number(page_main.dataset['pages']) || 0
 const wsUrl = galleryWsUrl(galleryId, window.location.search)
 const baseTitle = document.title
 
@@ -99,23 +102,28 @@ let isPreparingArchive = false
 let archiveWorkflowRunning = false
 let archiveWorkflowQueued = false
 let autoDownloadRequested = false
+// 1 while the pending download is the automatic one after finishing, 0 once asked for by a click
+let autoDownloadIsAuto: 0 | 1 = 0
+// Analytics for this run: when it started, the page count seen, pages left out, formats already reported ready
+let flowStart = 0
+let progressTotal = 0
+let missingPages = 0
+let readyReported = new Set<string>()
 const validFormats = ['zip', 'cbz', 'pdf', 'epub'] as const
 const onDemandFormats = ['cbz', 'pdf', 'epub'] as const
-let pendingPrepare:
-  | { format: string; resolve: () => void; reject: (error: Error) => void; onStarted: () => void }
-  | null = null
+let pendingPrepare: { format: string; resolve: () => void; reject: (error: Error) => void; onStarted: () => void } | null = null
 const defaultFinishText = step_finish_text.textContent || 'Finish!'
 
 // A reload or a back/forward visit already downloaded once; then the finished archive is only offered
 const navigationType = (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type
 let autoDownload = navigationType !== 'reload' && navigationType !== 'back_forward'
 
-function isValidFormat(format: string | null): format is typeof validFormats[number] {
-  return format !== null && validFormats.includes(format as typeof validFormats[number])
+function isValidFormat(format: string | null): format is (typeof validFormats)[number] {
+  return format !== null && validFormats.includes(format as (typeof validFormats)[number])
 }
 
-function isOnDemandFormat(format: string): format is typeof onDemandFormats[number] {
-  return onDemandFormats.includes(format as typeof onDemandFormats[number])
+function isOnDemandFormat(format: string): format is (typeof onDemandFormats)[number] {
+  return onDemandFormats.includes(format as (typeof onDemandFormats)[number])
 }
 
 function replaceArchiveExtension(url: string, format: string): string {
@@ -139,9 +147,7 @@ function updateDownloadHref(): void {
 
 function setDownloadLinkEnabled(enabled: boolean): void {
   progress_result.style.opacity = enabled ? '1' : '0.45'
-  progress_result.style.color = enabled
-    ? 'var(--text_color)'
-    : 'color-mix(in srgb, var(--text_color), var(--background_color) 45%)'
+  progress_result.style.color = enabled ? 'var(--text_color)' : 'color-mix(in srgb, var(--text_color), var(--background_color) 45%)'
   progress_result.style.pointerEvents = enabled ? 'auto' : 'none'
   progress_result.style.cursor = enabled ? 'pointer' : 'default'
   progress_result.setAttribute('aria-disabled', enabled ? 'false' : 'true')
@@ -198,11 +204,20 @@ function failPrepareUI(format: string): void {
   isPreparingArchive = false
 }
 
-function clickDownload(url: string): void {
+function clickDownload(url: string, auto: 0 | 1): void {
   const a = document.createElement('a')
   a.href = url
   a.click()
   addHistory({ id: galleryId, title: galleryTitle, format: progress_format.value })
+  track('file_download', { gallery, format: progress_format.value, source: 'page', auto })
+}
+
+/** Once per format and run; the first format counts from the start, later ones from their prepare request */
+function reportReady(format: string, since: number): void {
+  if (readyReported.has(format)) return
+  readyReported.add(format)
+  const seconds = Math.round((Date.now() - since) / 100) / 10
+  track('download_ready', { gallery, format, pages: galleryPages || progressTotal, missing: missingPages, seconds, source: 'page' })
 }
 
 function sendSocketCommand(command: Record<string, unknown>): void {
@@ -262,13 +277,14 @@ async function prepareSelectedArchive(format: string): Promise<void> {
 const queryFormat = new URLSearchParams(window.location.search).get('format')
 const cookieFormat = getCookie('file_format')
 
-function queueArchiveWorkflow(downloadAfterReady = false): void {
+function queueArchiveWorkflow(downloadAfterReady = false, auto = false): void {
   if (!downloadBaseUrl) {
     return
   }
 
   if (downloadAfterReady) {
     autoDownloadRequested = true
+    autoDownloadIsAuto = auto ? 1 : 0
   }
 
   archiveWorkflowQueued = true
@@ -285,8 +301,10 @@ function queueArchiveWorkflow(downloadAfterReady = false): void {
       updateDownloadHref()
 
       if (isOnDemandFormat(selectedFormat)) {
+        const since = readyReported.size === 0 ? flowStart : Date.now()
         try {
           await prepareSelectedArchive(selectedFormat)
+          reportReady(selectedFormat, since)
           updateDownloadHref()
           if (isPreparingArchive) {
             restoreCompletedUI(selectedFormat)
@@ -295,6 +313,7 @@ function queueArchiveWorkflow(downloadAfterReady = false): void {
           if (isPreparingArchive) {
             failPrepareUI(selectedFormat)
           }
+          if (downloadBaseUrl) track('download_error', { gallery, format: selectedFormat, stage: 'pack', source: 'page' })
           autoDownloadRequested = false
           return
         }
@@ -306,7 +325,7 @@ function queueArchiveWorkflow(downloadAfterReady = false): void {
       }
 
       if (autoDownloadRequested) {
-        clickDownload(replaceArchiveExtension(downloadBaseUrl, progress_format.value))
+        clickDownload(replaceArchiveExtension(downloadBaseUrl, progress_format.value), autoDownloadIsAuto)
         autoDownloadRequested = false
       }
     }
@@ -314,7 +333,7 @@ function queueArchiveWorkflow(downloadAfterReady = false): void {
     archiveWorkflowRunning = false
 
     if (archiveWorkflowQueued && downloadBaseUrl) {
-      queueArchiveWorkflow(autoDownloadRequested)
+      queueArchiveWorkflow(autoDownloadRequested, autoDownloadIsAuto === 1)
     }
   })
 }
@@ -328,8 +347,11 @@ if (isValidFormat(queryFormat)) {
 }
 
 syncPackTextToSelection()
+let shownFormat = progress_format.value
 
 progress_format.addEventListener('change', () => {
+  track('format_change', { gallery, from: shownFormat, to: progress_format.value })
+  shownFormat = progress_format.value
   setCookie('file_format', progress_format.value)
   updateDownloadHref()
   syncPackTextToSelection()
@@ -348,15 +370,17 @@ progress_result.addEventListener('click', (event) => {
   }
 
   event.preventDefault()
-  queueArchiveWorkflow(true)
+  queueArchiveWorkflow(true, false)
 })
 
 setDownloadLinkEnabled(false)
 
-function setErrorState(message: string, stage: 'connect' | 'download' | 'pack'): void {
+function setErrorState(message: string, stage: 'connect' | 'download' | 'pack', reported: 'connect' | 'download' | 'pack' | 'rate_limited' = stage): void {
   if (hasTerminalState) {
     return
   }
+
+  track('download_error', { gallery, format: progress_format.value, stage: reported, source: 'page' })
 
   if (stage === 'connect') {
     statusAnimation(step_connect_container, step_connect_status, 'error')
@@ -445,7 +469,13 @@ function missingPagesText(payload: string): string {
   const pages = Array.isArray(warning.missing) ? warning.missing.filter((n): n is number => Number.isInteger(n)) : []
   const count = typeof warning.count === 'number' ? warning.count : pages.length
   const total = typeof warning.total === 'number' ? warning.total : 0
-  const fill = (template: string) => template.replace('{count}', String(count || '?')).replace('{total}', String(total || '?')).replace('{pages}', pages.join(', ') + (count > pages.length ? ', …' : ''))
+  missingPages = count
+  if (total) progressTotal = total
+  const fill = (template: string) =>
+    template
+      .replace('{count}', String(count || '?'))
+      .replace('{total}', String(total || '?'))
+      .replace('{pages}', pages.join(', ') + (count > pages.length ? ', …' : ''))
 
   const sentence = fill(t('{count} of {total} pages are no longer available and were left out.'))
   return pages.length ? `${sentence} ${fill(t('(pages {pages})'))}` : sentence
@@ -496,6 +526,7 @@ function handleBinary(buffer: Uint8Array): void {
 
     const completed = view.getUint16(1)
     const total = view.getUint16(3)
+    progressTotal = total
 
     if (total === 0) {
       fail(t('Malformed download progress message'), 'download')
@@ -567,13 +598,20 @@ function handleBinary(buffer: Uint8Array): void {
     setProgress(100, false)
     hasTerminalState = true
     notifyReady()
-    queueArchiveWorkflow(autoDownload)
+    if (!isOnDemandFormat(progress_format.value)) reportReady('zip', flowStart)
+    queueArchiveWorkflow(autoDownload, true)
   } else {
     fail(t('Unexpected response from server'), currentStage())
   }
 }
 
 function connect(): void {
+  flowStart = Date.now()
+  progressTotal = 0
+  missingPages = 0
+  readyReported = new Set()
+  track('download_start', { gallery, format: progress_format.value, source: 'page' })
+
   session = new GallerySocket(
     wsUrl,
     {
@@ -641,7 +679,7 @@ function connect(): void {
 
         if (!opened) {
           // A refused upgrade (rate limit) or no server at all
-          setErrorState(t('Connection failed or rate limited'), 'connect')
+          setErrorState(t('Connection failed or rate limited'), 'connect', 'rate_limited')
         } else if (!hasReceivedAnyMessage) {
           setErrorState(t('Server busy or rate limited. Try again later.'), 'connect')
         } else {
@@ -683,6 +721,7 @@ else image_cover.addEventListener('load', revealProgress, { once: true })
 
 copy_link.hidden = false
 copy_link.addEventListener('click', async () => {
+  track('copy_link', { gallery })
   const url = `${window.location.origin}/g/${galleryId}`
   let copied = false
 

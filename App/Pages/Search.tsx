@@ -8,6 +8,7 @@
  * @param args.total Number of results
  * @param args.results Galleries on this page
  * @param args.error Error message when the search failed
+ * @param args.retryAfter Seconds to wait, when the search was rate limited
  * @param args.api API origin, for tag suggestions
  * @param args.t Translation function
  * @returns Object containing the page title, description and content
@@ -24,6 +25,7 @@ export default (args: {
   total: number
   results: { id: number; title: string; thumbnail: string; width: number; height: number; pages: number }[]
   error?: string
+  retryAfter?: number
   api: string
   language?: string
   languages?: { code: string; name: string; symbol: string; tag: string }[]
@@ -69,6 +71,16 @@ export default (args: {
     allRunning: t('Downloading this page…')
   })
 
+  // For the analytics events in Server/Scripts/Search.ts: counts only, never the query text
+  const shown = !args.error && !!args.query
+  const trackData = {
+    'data-sort': shown ? args.sort : undefined,
+    'data-page': shown ? String(args.page) : undefined,
+    'data-total': shown ? String(args.total) : undefined,
+    'data-length': shown ? String(args.query.length) : undefined,
+    'data-retry-after': args.retryAfter ? String(args.retryAfter) : undefined
+  }
+
   return {
     title: args.query ? `nZip | ${t('Search')}: ${args.query}` : `nZip | ${t('Search')}`,
     description: t('Search doujinshi and download them as an archive.'),
@@ -108,7 +120,7 @@ export default (args: {
 
           <p id="search-status" className="text search-status" role="status" aria-live="polite"></p>
 
-          <div className="search-grid" data-strings={cardStrings}>
+          <div className="search-grid" data-strings={cardStrings} {...trackData}>
             {args.results.map((gallery) => (
               <div className="search-card text">
                 <a href={`/g/${gallery.id}`} className="search-card-link" title={gallery.title}>
@@ -117,7 +129,7 @@ export default (args: {
                 </a>
                 <div className="search-card-meta">
                   <span>{gallery.id} · {gallery.pages} {t('pages')}</span>
-                  <button type="button" className="search-card-download text" data-id={String(gallery.id)} data-title={gallery.title} aria-label={`${t('Download')} ${gallery.id}`}>ZIP</button>
+                  <button type="button" className="search-card-download text" data-id={String(gallery.id)} data-title={gallery.title} data-pages={String(gallery.pages)} aria-label={`${t('Download')} ${gallery.id}`}>ZIP</button>
                 </div>
                 <span className="search-card-message" role="status"></span>
               </div>

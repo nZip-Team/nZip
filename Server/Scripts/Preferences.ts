@@ -1,4 +1,5 @@
 import { getCookie, setCookie, deleteCookie } from './Shared/Cookie'
+import { track } from './Shared/Track'
 
 const preferences_button = document.getElementById('preferences_button') as HTMLButtonElement
 const preferences_modal = document.getElementById('preferences_modal') as HTMLDivElement
@@ -13,6 +14,7 @@ preference_blur.checked = getCookie('blur') !== '0'
 preference_blur.addEventListener('change', () => {
   setCookie('blur', preference_blur.checked ? '1' : '0')
   document.documentElement.classList.toggle('no-blur', !preference_blur.checked)
+  track('pref_change', { key: 'blur', value: preference_blur.checked ? 'on' : 'off' })
 })
 
 const currentTheme = getCookie('theme')
@@ -32,6 +34,7 @@ for (const input of theme_inputs) {
     document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
       meta.content = color ?? (meta.media.includes('light') ? '#ffffff' : '#000000')
     })
+    track('pref_change', { key: 'theme', value: input.value })
   })
 }
 
@@ -42,11 +45,13 @@ if ('Notification' in window) {
   preference_notify.addEventListener('change', async () => {
     if (!preference_notify.checked) {
       setCookie('notify', '0')
+      track('pref_change', { key: 'notify', value: 'off' })
       return
     }
     const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
     preference_notify.checked = permission === 'granted'
     setCookie('notify', preference_notify.checked ? '1' : '0')
+    track('pref_change', { key: 'notify', value: preference_notify.checked ? 'on' : 'off' })
   })
 }
 
@@ -56,7 +61,9 @@ for (const button of Array.from(language_list.querySelectorAll<HTMLButtonElement
     const code = button.dataset['code']
     if (!code) return
     setCookie('language', code)
-    window.location.reload()
+    track('pref_change', { key: 'language', value: code })
+    // A moment for the event to leave before the reload cancels it
+    setTimeout(() => window.location.reload(), window.umami ? 150 : 0)
   })
 }
 

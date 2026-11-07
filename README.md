@@ -81,32 +81,62 @@ The container starts as root only to hand that volume to the unprivileged `bun` 
 
 Every variable lives in `.env`.
 
-| Variable | Default | What it does |
-| --- | --- | --- |
-| `HOST` | `http://localhost:3000` | Public origin used to build download links |
-| `PORT` | `3000` | Port the server listens on |
-| `API_URL` | — | **Required.** Gallery API, absolute URL |
-| `IMAGE_URL` | — | **Required.** Image host, absolute URL |
-| `CONCURRENT_IMAGE_DOWNLOADS` | `16` | Parallel image fetches per gallery |
-| `RATE_LIMIT` | `10` | WebSocket upgrades per minute per client; `0` disables |
-| `SEARCH_RATE_LIMIT` | `20` | Searches per minute per client, after a burst of 1.5× this; `0` disables |
-| `SEARCH_HOURLY_LIMIT` | `300` | Searches per hour per client; `0` disables |
-| `TRUST_X_FORWARDED_FOR` | `false` | Read the client address from trusted proxies |
-| `TRUSTED_PROXIES` | — | Comma-separated IPs or CIDRs of those proxies |
-| `LOG_CLIENT_IP` | `false` | Log raw client IPs instead of salted hash tags |
-| `LOG_CLIENT_SALT` | random | Keeps the hash tags stable across restarts and instances |
-| `LOG_FORMAT` | `text` | `json` writes one JSON object per log line |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PREFIX` | — | Keep finished archives in S3; without `S3_BUCKET` they stay on local disk |
-| `S3_VIRTUAL_HOSTED_STYLE` | `false` | Address the bucket as `bucket.endpoint` instead of `endpoint/bucket` |
-| `ARCHIVE_RETENTION_DAYS` | `7` | Days without a download before an archive is evicted from S3 (`0` = never) |
-| `ARCHIVE_MAX_GB` | `0` | Size cap for S3 archives, least recently downloaded go first (`0` = no cap) |
-| `DRAIN_TIMEOUT_SECONDS` | `60` | How long a stopping instance lets running downloads finish; the whole shutdown takes up to this + 25 s, so keep `stop_grace_period` above that |
-| `ANALYTICS` | — | HTML inserted into `<head>` as is |
-| `CONTENT_SECURITY_POLICY` | derived | Policy of the pages; by default it allows `API_URL`, `IMAGE_URL` and the URLs in `ANALYTICS`. A full policy replaces it, `off` sends none |
-| `NZIP_RUN_AS_ROOT` | `false` | Docker only: keep running as root instead of the `bun` user |
-| `NODE_ENV` | `development` | `development` (live reload) or `production` |
+| Variable                                                                                         | Default                 | What it does                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HOST`                                                                                           | `http://localhost:3000` | Public origin used to build download links                                                                                                     |
+| `PORT`                                                                                           | `3000`                  | Port the server listens on                                                                                                                     |
+| `API_URL`                                                                                        | —                       | **Required.** Gallery API, absolute URL                                                                                                        |
+| `IMAGE_URL`                                                                                      | —                       | **Required.** Image host, absolute URL                                                                                                         |
+| `CONCURRENT_IMAGE_DOWNLOADS`                                                                     | `16`                    | Parallel image fetches per gallery                                                                                                             |
+| `RATE_LIMIT`                                                                                     | `10`                    | WebSocket upgrades per minute per client; `0` disables                                                                                         |
+| `SEARCH_RATE_LIMIT`                                                                              | `20`                    | Searches per minute per client, after a burst of 1.5× this; `0` disables                                                                       |
+| `SEARCH_HOURLY_LIMIT`                                                                            | `300`                   | Searches per hour per client; `0` disables                                                                                                     |
+| `TRUST_X_FORWARDED_FOR`                                                                          | `false`                 | Read the client address from trusted proxies                                                                                                   |
+| `TRUSTED_PROXIES`                                                                                | —                       | Comma-separated IPs or CIDRs of those proxies                                                                                                  |
+| `LOG_CLIENT_IP`                                                                                  | `false`                 | Log raw client IPs instead of salted hash tags                                                                                                 |
+| `LOG_CLIENT_SALT`                                                                                | random                  | Keeps the hash tags stable across restarts and instances                                                                                       |
+| `LOG_FORMAT`                                                                                     | `text`                  | `json` writes one JSON object per log line                                                                                                     |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PREFIX` | —                       | Keep finished archives in S3; without `S3_BUCKET` they stay on local disk                                                                      |
+| `S3_VIRTUAL_HOSTED_STYLE`                                                                        | `false`                 | Address the bucket as `bucket.endpoint` instead of `endpoint/bucket`                                                                           |
+| `ARCHIVE_RETENTION_DAYS`                                                                         | `7`                     | Days without a download before an archive is evicted from S3 (`0` = never)                                                                     |
+| `ARCHIVE_MAX_GB`                                                                                 | `0`                     | Size cap for S3 archives, least recently downloaded go first (`0` = no cap)                                                                    |
+| `DRAIN_TIMEOUT_SECONDS`                                                                          | `60`                    | How long a stopping instance lets running downloads finish; the whole shutdown takes up to this + 25 s, so keep `stop_grace_period` above that |
+| `ANALYTICS`                                                                                      | —                       | HTML inserted into `<head>` as is                                                                                                              |
+| `CONTENT_SECURITY_POLICY`                                                                        | derived                 | Policy of the pages; by default it allows `API_URL`, `IMAGE_URL` and the URLs in `ANALYTICS`. A full policy replaces it, `off` sends none      |
+| `NZIP_RUN_AS_ROOT`                                                                               | `false`                 | Docker only: keep running as root instead of the `bun` user                                                                                    |
+| `NODE_ENV`                                                                                       | `development`           | `development` (live reload) or `production`                                                                                                    |
 
 A number that does not parse (say `RATE_LIMIT=1O`) stops the start with an error naming the variable.
+
+### Analytics
+
+`ANALYTICS` takes the tracker's script tag. For nZip Analytics (Umami compatible) use:
+
+```env
+ANALYTICS=<script defer src="https://api.nhentai.zip/script.js" data-website-id="YOUR-ID" data-do-not-track="true"></script>
+```
+
+The derived `CONTENT_SECURITY_POLICY` allows the script's origin in `script-src` and `connect-src` (it posts to `<origin>/api/send`). `data-do-not-track="true"` makes the tracker skip browsers that send Do Not Track; nZip shows no consent banner and sets no cookies or storage for analytics. Without `ANALYTICS`, or with the script blocked, nothing is sent.
+
+Besides page views the pages send these events through `umami.track` (`Server/Scripts/Shared/Track.ts`). Calls made before the script loaded wait up to 10 s (at most 20), identical events within 500 ms count once, and data holds numbers and short strings only, never search text or titles.
+
+| Event                 | Data                                                         | When                                                                                                                        |
+| --------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `download_start`      | `gallery`, `format`, `source` (`page` or `card`)             | A download starts (the download page, a search result button)                                                               |
+| `download_ready`      | `gallery`, `format`, `pages`, `missing`, `seconds`, `source` | The archive is ready in the chosen format; `missing` pages were left out, `seconds` since the start (0.1 s)                 |
+| `file_download`       | `gallery`, `format`, `source`, `auto`                        | The file is handed to the browser; `auto` is 1 for the automatic start after finishing, 0 for a click on the button or card |
+| `download_error`      | `gallery`, `format`, `stage`, `source`                       | A download failed; `stage` is `connect`, `download`, `pack` or `rate_limited`                                               |
+| `format_change`       | `gallery`, `from`, `to`                                      | The format select on the download page changed                                                                              |
+| `search`              | `sort`, `page`, `results`, `length`                          | A search results page is shown; `results` is the total found, `length` the query length                                     |
+| `search_rate_limited` | `seconds`                                                    | A search was answered 429                                                                                                   |
+| `batch_download`      | `count`, `format`                                            | "Download all on this page"                                                                                                 |
+| `copy_link`           | `gallery`                                                    | Copy link on the download page                                                                                              |
+| `pref_change`         | `key`, `value`                                               | `language` (its code), `theme` (`light`, `dark`, `system`), `blur` or `notify` (`on`, `off`)                                |
+| `history_clear`       | —                                                            | The download history was cleared                                                                                            |
+| `shortcut`            | `key`                                                        | A keyboard shortcut was used (`/`, `d`, `ArrowLeft`, `ArrowRight`)                                                          |
+| `ws_reconnect`        | `attempt`                                                    | A download socket reconnected after `attempt` tries                                                                         |
+
+`gallery` is the numeric gallery ID.
 
 **Behind a reverse proxy or CDN, set `TRUST_X_FORWARDED_FOR=true` and `TRUSTED_PROXIES`**, or every request appears to come from the proxy and all visitors share one rate-limit bucket. List only the proxies themselves: a catch-all such as `0.0.0.0/0` lets anyone pick their own address. Behind Cloudflare the address comes from `CF-Connecting-IP`; otherwise it is the last `X-Forwarded-For` entry that is not a trusted proxy.
 

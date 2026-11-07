@@ -1,5 +1,7 @@
 // Download history kept in this browser only
 
+import { track } from './Track'
+
 export interface HistoryEntry {
   id: string
   title: string
@@ -30,6 +32,7 @@ export function addHistory(entry: Omit<HistoryEntry, 'date'>): void {
 }
 
 export function clearHistory(): void {
+  track('history_clear')
   try {
     localStorage.removeItem(KEY)
   } catch {

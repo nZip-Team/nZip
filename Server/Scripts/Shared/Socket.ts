@@ -1,5 +1,7 @@
 // The gallery WebSocket with reconnects, shared by the download page and the search result buttons
 
+import { track } from './Track'
+
 export function galleryWsUrl(id: string, search = ''): string {
   return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/g/${id}${search}`
 }
@@ -67,8 +69,10 @@ export class GallerySocket {
     socket.addEventListener('open', () => {
       if (stale()) return
       const reconnected = this.opened
+      const attempt = this.attempts
       this.opened = true
       this.attempts = 0
+      if (reconnected) track('ws_reconnect', { attempt })
       this.handlers.open(reconnected)
     })
 

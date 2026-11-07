@@ -39,7 +39,7 @@ export default function registerSearch(app: Hono<AppEnv>, deps: { nh: NH }): voi
       c.status(429)
       // The search page, so the form keeps the query
       const error = Languages.translate(getLang(c), 'Search', 'Too many searches. Please wait {seconds} seconds and try again.').replace('{seconds}', String(seconds))
-      return Page(c, 'Search', { ...empty, error })
+      return Page(c, 'Search', { ...empty, error, retryAfter: seconds })
     }
 
     try {
