@@ -6,12 +6,14 @@ import Preferences from '../Components/Preferences'
  * @param args.id Gallery ID
  * @param args.title Gallery title
  * @param args.cover Gallery cover
+ * @param args.coverWidth Cover width in pixels, so the layout is reserved before the image loads
+ * @param args.coverHeight Cover height in pixels
  * @param args.pages Page count, for the analytics events
  * @param args.t Translation function
  * @returns Object containing the page title, description, and content
  */
 // prettier-ignore
-export default (args: { id: string, title: string | null, cover: string, pages?: number, language?: string; languages?: { code: string; name: string; symbol: string; tag: string }[], t: (key: string) => string, tr: (section: string, key: string) => string, script: (name: string) => string }) => {
+export default (args: { id: string, title: string | null, cover: string, coverWidth?: number, coverHeight?: number, pages?: number, language?: string; languages?: { code: string; name: string; symbol: string; tag: string }[], t: (key: string) => string, tr: (section: string, key: string) => string, script: (name: string) => string }) => {
   const t = args.t
   const title = args.title || args.id
 
@@ -57,7 +59,7 @@ export default (args: { id: string, title: string | null, cover: string, pages?:
       <>
         <main style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '2rem' }} data-id={args.id} data-title={title} data-pages={args.pages ? String(args.pages) : undefined}>
           <button id="cover-toggle" type="button" className="cover-toggle" aria-pressed="false" aria-label={t('Show cover')}>
-            <img id="image-cover" className="cover-image" src={args.cover} alt={title} />
+            <img id="image-cover" className="cover-image" src={args.cover} alt={title} width={args.coverWidth} height={args.coverHeight} style={args.coverWidth && args.coverHeight ? { aspectRatio: `${args.coverWidth} / ${args.coverHeight}` } : undefined} />
           </button>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <h1 className="text title download-title">{title}</h1>

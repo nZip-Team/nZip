@@ -37,7 +37,8 @@ export default function registerPages(app: Hono<AppEnv>, deps: { nh: NH; appDir:
 
       const title = response.title.english || response.title.japanese || response.title.pretty || null
       const cover = `${Config.imageHost}/${response.pages[0]?.path}`
-      return Page(c, 'Download', { id, title, cover, pages: response.num_pages || response.pages.length })
+      const first = response.pages[0]
+      return Page(c, 'Download', { id, title, cover, coverWidth: first?.width, coverHeight: first?.height, pages: response.num_pages || response.pages.length })
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('status: 404') || error.message.includes('Not Found') || error.message.includes('does not exist')) {

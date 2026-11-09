@@ -532,6 +532,7 @@ select {
 
 .cover-image {
   display: block;
+  width: auto;
   height: clamp(35rem, 70dvh, 56rem);
   border-radius: 0.25rem;
   filter: blur(2.5px);
@@ -558,6 +559,12 @@ select {
   align-self: flex-start;
   font-size: 0.95rem;
   opacity: 0.75;
+}
+
+/* The script reveals the button once it runs; keep its row so the page below does not jump */
+.copy-link[hidden] {
+  display: block;
+  visibility: hidden;
 }
 
 .steps {
