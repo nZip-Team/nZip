@@ -15,6 +15,8 @@ import Log, { clientTag } from './Tools/Log'
 import { getIP, isInternalRequest } from './Tools/ClientIP'
 import Metrics, { httpRequests } from './Tools/Metrics'
 import { buildContentSecurityPolicy } from './Tools/SecurityHeaders'
+import { PRECONNECT_LINK } from './Tools/Preconnect'
+import { EDGE_CACHE_CONTROL, isEdgeCacheable } from './Tools/EdgeCache'
 
 import Pages from './Modules/Pages'
 import Languages from './Modules/Language'
@@ -119,8 +121,13 @@ export default async (): Promise<() => Promise<void>> => {
     c.header('X-Frame-Options', 'SAMEORIGIN')
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
     if (https) c.header('Strict-Transport-Security', 'max-age=31536000')
-    if (contentSecurityPolicy && c.res.headers.get('content-type')?.startsWith('text/html')) {
-      c.header('Content-Security-Policy', contentSecurityPolicy(c.req.header('Host')))
+    if (c.res.headers.get('content-type')?.startsWith('text/html')) {
+      if (contentSecurityPolicy) c.header('Content-Security-Policy', contentSecurityPolicy(c.req.header('Host')))
+      if (PRECONNECT_LINK) c.header('Link', PRECONNECT_LINK)
+      if (isEdgeCacheable(c.req.method, c.req.path, c.res.status, c.req.header('Cookie'), c.res.headers.has('Set-Cookie'))) {
+        // A CDN rule that honours the origin's Cache-Control may keep this for a short time; browsers always revalidate
+        c.header('Cache-Control', EDGE_CACHE_CONTROL)
+      }
     }
 
     const status = c.res.status

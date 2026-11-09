@@ -6,6 +6,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 
 import Config from '../../Config'
+import { PRECONNECT_ORIGINS } from '../Tools/Preconnect'
 
 // Changes with the file, so CDN and browser caches never serve an old stylesheet
 const STYLE_VERSION = Bun.hash(readFileSync(path.join(process.cwd(), 'App/Styles/Main.css'))).toString(36)
@@ -33,6 +34,9 @@ export default (page: ReturnType<PageModule>, args: { analytics?: string | null;
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {PRECONNECT_ORIGINS.map((origin) => (
+          <link rel="preconnect" href={origin} />
+        ))}
         <title>{page.title}</title>
         <meta name="title" content={page.title} />
         <meta name="description" content={page.description} />
