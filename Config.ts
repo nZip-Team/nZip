@@ -88,7 +88,9 @@ export default {
     // An archive up to this size is one PUT (Bun's default is 5 MB parts: create + parts + complete, and a block per part in Garage)
     partSizeMB: numberEnv('S3_PART_SIZE_MB', 64, { integer: true, min: 5, max: 5120 }),
     // Uploads running at once per instance; the rest wait
-    uploadConcurrency: numberEnv('S3_UPLOAD_CONCURRENCY', 3, { integer: true, min: 1 })
+    uploadConcurrency: numberEnv('S3_UPLOAD_CONCURRENCY', 3, { integer: true, min: 1 }),
+    // No uploads and no evictions: finished archives stay on local disk until their session ends (lets a busy bucket catch up)
+    uploadsPaused: parseBooleanEnv(process.env['S3_UPLOADS_PAUSED'])
   },
 
   // 0 = never evict / no cap

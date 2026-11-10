@@ -139,7 +139,7 @@ export default class ArchiveStore {
 
   /** Concurrent calls for the same file share one upload */
   upload(hash: string, file: string): Promise<void> {
-    if (!this.client) return Promise.resolve()
+    if (!this.client || Config.s3.uploadsPaused) return Promise.resolve()
 
     const key = this.key(hash, file)
     const pending = this.uploads.get(key)
@@ -301,7 +301,7 @@ export default class ArchiveStore {
 
   /** Expired archives first, then least recently downloaded until under the cap */
   async evict(): Promise<void> {
-    if (!this.client || !this.db) return
+    if (!this.client || !this.db || Config.s3.uploadsPaused) return
 
     const victims: IndexRow[] = []
 

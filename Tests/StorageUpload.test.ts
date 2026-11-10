@@ -65,4 +65,20 @@ describe('archive uploads', () => {
     expect(peak).toBeLessThanOrEqual(2)
     expect(store.isUploading('d')).toBe(false)
   })
+
+  test('S3_UPLOADS_PAUSED uploads nothing and evicts nothing', async () => {
+    const store = new ArchiveStore(path.join(dir, 'downloads2'), path.join(dir, 'cache2'))
+    fs.mkdirSync(path.join(dir, 'downloads2', 'p'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'downloads2', 'p', 'g.zip'), new Uint8Array(1024))
+    requests.length = 0
+    Config.s3.uploadsPaused = true
+    try {
+      await store.upload('p', 'g.zip')
+      await store.evict()
+    } finally {
+      Config.s3.uploadsPaused = false
+    }
+    expect(requests).toEqual([])
+    expect(store.isUploading('p')).toBe(false)
+  })
 })
