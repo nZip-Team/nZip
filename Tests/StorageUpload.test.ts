@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-// A stand-in S3 that records requests; set before Config is read
+// A stand-in S3 that records requests
 const requests: string[] = []
 let inFlight = 0
 let peak = 0
@@ -25,16 +25,26 @@ const server = Bun.serve({
     return new Response('', { headers: { ETag: '"e"' } })
   }
 })
-process.env['S3_ENDPOINT'] = `http://localhost:${server.port}`
-process.env['S3_BUCKET'] = 'archives'
-process.env['S3_ACCESS_KEY_ID'] = 'a'
-process.env['S3_SECRET_ACCESS_KEY'] = 's'
-process.env['S3_UPLOAD_CONCURRENCY'] = '2'
+
+// Config is read once per process, whichever test file imports it first: set the S3 part of it directly and put it back
+const { default: Config } = await import('../Config')
+const saved = { ...Config.s3 }
+Object.assign(Config.s3, {
+  endpoint: `http://localhost:${server.port}`,
+  bucket: 'archives',
+  region: 'garage',
+  accessKeyId: 'a',
+  secretAccessKey: 's',
+  prefix: '',
+  uploadConcurrency: 2,
+  partSizeMB: 64
+})
 
 const { default: ArchiveStore } = await import('../Server/Storage')
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nzip-upload-'))
 afterAll(() => {
+  Object.assign(Config.s3, saved)
   server.stop(true)
   fs.rmSync(dir, { recursive: true, force: true })
 })
