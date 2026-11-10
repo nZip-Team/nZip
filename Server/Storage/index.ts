@@ -48,6 +48,8 @@ export default class ArchiveStore {
   private db: Database | null = null
   private downloadDir: string
   private uploads = new Map<string, Promise<void>>()
+  private uploadSlots = Config.s3.uploadConcurrency
+  private uploadQueue: (() => void)[] = []
   private touchedAt = new Map<string, number>()
 
   constructor(downloadDir: string, cacheDir: string) {
@@ -63,7 +65,8 @@ export default class ArchiveStore {
       region: s3.region,
       accessKeyId: s3.accessKeyId,
       secretAccessKey: s3.secretAccessKey,
-      virtualHostedStyle: s3.virtualHostedStyle
+      virtualHostedStyle: s3.virtualHostedStyle,
+      partSize: s3.partSizeMB * 1048576
     })
 
     fs.mkdirSync(cacheDir, { recursive: true })
@@ -142,16 +145,30 @@ export default class ArchiveStore {
     const pending = this.uploads.get(key)
     if (pending) return pending
 
-    const upload = (async () => {
+    const upload = this.withUploadSlot(async () => {
       const source = Bun.file(this.localPath(hash, file))
       const started = Date.now()
       await timeS3('put', () => this.client!.write(key, source, { type: this.contentType(file) }))
       this.record(key, source.size, Date.now())
       Log.info(`Archive Uploaded: ${key} (${(source.size / 1048576).toFixed(1)} MB, ${Date.now() - started} ms)`)
-    })().finally(() => this.uploads.delete(key))
+    }).finally(() => this.uploads.delete(key))
 
     this.uploads.set(key, upload)
     return upload
+  }
+
+  /** At most S3_UPLOAD_CONCURRENCY uploads run; the others wait in order (and still count as uploading) */
+  private async withUploadSlot<T>(run: () => Promise<T>): Promise<T> {
+    if (this.uploadSlots > 0) this.uploadSlots--
+    else await new Promise<void>((resolve) => this.uploadQueue.push(resolve))
+
+    try {
+      return await run()
+    } finally {
+      const next = this.uploadQueue.shift()
+      if (next) next()
+      else this.uploadSlots++
+    }
   }
 
   /** A directory with a running upload must not be deleted yet */

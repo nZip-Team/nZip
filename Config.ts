@@ -84,7 +84,11 @@ export default {
     accessKeyId: process.env['S3_ACCESS_KEY_ID'] || '',
     secretAccessKey: process.env['S3_SECRET_ACCESS_KEY'] || '',
     prefix: (process.env['S3_PREFIX'] || '').replace(/^\/+|\/+$/g, ''),
-    virtualHostedStyle: parseBooleanEnv(process.env['S3_VIRTUAL_HOSTED_STYLE'])
+    virtualHostedStyle: parseBooleanEnv(process.env['S3_VIRTUAL_HOSTED_STYLE']),
+    // An archive up to this size is one PUT (Bun's default is 5 MB parts: create + parts + complete, and a block per part in Garage)
+    partSizeMB: numberEnv('S3_PART_SIZE_MB', 64, { integer: true, min: 5, max: 5120 }),
+    // Uploads running at once per instance; the rest wait
+    uploadConcurrency: numberEnv('S3_UPLOAD_CONCURRENCY', 3, { integer: true, min: 1 })
   },
 
   // 0 = never evict / no cap
